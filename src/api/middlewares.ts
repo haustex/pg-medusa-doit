@@ -1,4 +1,5 @@
-import { defineMiddlewares, validateAndTransformBody } from "@medusajs/framework/http"
+import { defineMiddlewares, validateAndTransformBody, validateAndTransformQuery } from "@medusajs/framework/http"
+import { storeRateLimit } from "../lib/store-rate-limit"
 import {
   PostAdminDoitAttentionResolve,
   PostAdminDoitSettlementImport,
@@ -6,10 +7,25 @@ import {
   PostAdminDoitWithdrawal,
 } from "./admin/doit/validators"
 import { PostAdminDoitSettings } from "./admin/doit/settings/validators"
+import { GetStoreDoitMethods } from "./store/doit/validators"
 import { DOIT_WEBHOOK_MATCHER, verifyDoitSignature } from "./hooks/verify-doit-signature"
 
 export default defineMiddlewares({
   routes: [
+    {
+      // Storefront polling: ~12/min per cart at the suggested 5 s interval.
+      matcher: "/store/doit/carts/:id/payment",
+      method: "GET",
+      middlewares: [storeRateLimit({ perIp: 120, perCart: 40 })],
+    },
+    {
+      matcher: "/store/doit/methods",
+      method: "GET",
+      middlewares: [
+        storeRateLimit({ perIp: 30, perCart: 20 }),
+        validateAndTransformQuery(GetStoreDoitMethods, {}),
+      ],
+    },
     {
       matcher: "/admin/doit/settings",
       method: "POST",

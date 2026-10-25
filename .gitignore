@@ -29,3 +29,6 @@ build
 !.env.example
 *.pem
 *.key
+
+# E2E
+integration-tests/.logs

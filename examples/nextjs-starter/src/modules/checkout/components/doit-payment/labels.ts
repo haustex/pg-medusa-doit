@@ -1,0 +1,50 @@
+// All shopper-facing text of the doit.id checkout in one place. Edit or
+// translate freely; nothing else in these components hard-codes copy.
+export const doitLabels = {
+  methodTitle: "QRIS / Virtual Account",
+  chooseMethod: "Pilih cara bayar",
+  qris: "QRIS",
+  qrisHint: "Semua e-wallet dan m-banking",
+  va: "Virtual Account",
+  transfer: "Transfer bank",
+  anyMethod: "Pilih di halaman pembayaran",
+  feeByCustomer: (fee: string) => `+ biaya ${fee}`,
+  noFee: "Tanpa biaya tambahan",
+  methodsUnavailable: "Daftar metode tidak bisa dimuat. Metode bawaan toko akan dipakai.",
+  loading: "Memuat…",
+  payButton: "Bayar",
+
+  payTitle: "Selesaikan pembayaran",
+  totalToPay: "Total dibayar",
+  includesFee: (fee: string) => `Termasuk biaya ${fee}`,
+  scanQris: "Pindai kode QR ini dengan aplikasi e-wallet atau m-banking.",
+  vaNumber: (bank: string) => `Nomor Virtual Account ${bank}`,
+  vaHint: "Transfer tepat sesuai total ke nomor ini dari m-banking, internet banking, atau ATM.",
+  copy: "Salin",
+  copied: "Tersalin",
+  expiresIn: "Sisa waktu",
+  expired: "Waktu pembayaran habis",
+  openHosted: "Buka halaman pembayaran",
+
+  waiting: "Menunggu pembayaran… halaman ini diperbarui otomatis.",
+  paid: "Pembayaran diterima. Membuat pesanan…",
+  failed: "Pembayaran gagal atau kedaluwarsa.",
+  newInvoice: "Buat tagihan baru",
+  testMode: "Mode uji (sandbox): tidak ada uang sungguhan.",
+  errorGeneric: "Status pembayaran belum bisa diperiksa. Mencoba lagi…",
+}
+
+export const bankNames: Record<string, string> = {
+  bmri: "Mandiri",
+  bnia: "BNI",
+  brin: "BRI",
+  cimb: "CIMB Niaga",
+  permata: "Permata",
+  maybank: "Maybank",
+  danamon: "Danamon",
+  bsyi: "BSI",
+  bca: "BCA",
+  mandiri: "Mandiri",
+  bni: "BNI",
+  bsi: "BSI",
+}

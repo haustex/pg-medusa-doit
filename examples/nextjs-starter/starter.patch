@@ -1,0 +1,123 @@
+diff --git a/src/lib/constants.tsx b/src/lib/constants.tsx
+index ce3bc60..0d609e8 100644
+--- a/src/lib/constants.tsx
++++ b/src/lib/constants.tsx
+@@ -34,6 +34,10 @@ export const paymentInfoMap: Record<
+     title: "Manual Payment",
+     icon: <CreditCard />,
+   },
++  pp_doit_doit: {
++    title: "QRIS / Virtual Account",
++    icon: <CreditCard />,
++  },
+   // Add more payment providers here
+ }
+ 
+diff --git a/src/modules/checkout/components/payment-button/index.tsx b/src/modules/checkout/components/payment-button/index.tsx
+index 04a83c9..6567904 100644
+--- a/src/modules/checkout/components/payment-button/index.tsx
++++ b/src/modules/checkout/components/payment-button/index.tsx
+@@ -2,6 +2,10 @@
+ 
+ import { isManual, isStripeLike } from "@lib/constants"
+ import { placeOrder } from "@lib/data/cart"
++import {
++  DoitPaymentButton,
++  isDoit,
++} from "@modules/checkout/components/doit-payment"
+ import { HttpTypes } from "@medusajs/types"
+ import { Button } from "@medusajs/ui"
+ import { useElements, useStripe } from "@stripe/react-stripe-js"
+@@ -35,6 +39,8 @@ const PaymentButton: React.FC<PaymentButtonProps> = ({
+           data-testid={dataTestId}
+         />
+       )
++    case isDoit(paymentSession?.provider_id):
++      return <DoitPaymentButton cart={cart} notReady={notReady} />
+     case isManual(paymentSession?.provider_id):
+       return (
+         <ManualTestPaymentButton notReady={notReady} data-testid={dataTestId} />
+diff --git a/src/modules/checkout/components/payment/index.tsx b/src/modules/checkout/components/payment/index.tsx
+index d96beeb..e806b99 100644
+--- a/src/modules/checkout/components/payment/index.tsx
++++ b/src/modules/checkout/components/payment/index.tsx
+@@ -3,6 +3,7 @@
+ import { RadioGroup } from "@headlessui/react"
+ import { isStripeLike, paymentInfoMap } from "@lib/constants"
+ import { initiatePaymentSession } from "@lib/data/cart"
++import { DoitChoice, selectDoitMethod } from "@lib/data/doit"
+ import { CheckCircleSolid, CreditCard } from "@medusajs/icons"
+ import { Button, Container, Heading, Text, clx } from "@medusajs/ui"
+ import ErrorMessage from "@modules/checkout/components/error-message"
+@@ -10,6 +11,10 @@ import PaymentContainer, {
+   StripeCardContainer,
+ } from "@modules/checkout/components/payment-container"
+ import Divider from "@modules/common/components/divider"
++import {
++  DoitRailPicker,
++  isDoit,
++} from "@modules/checkout/components/doit-payment"
+ import { usePathname, useRouter, useSearchParams } from "next/navigation"
+ import { useCallback, useEffect, useState } from "react"
+ 
+@@ -32,6 +37,16 @@ const Payment = ({
+     activeSession?.provider_id ?? ""
+   )
+ 
++  const [doitChoice, setDoitChoice] = useState<DoitChoice | null>(
++    activeSession && isDoit(activeSession.provider_id)
++      ? {
++          rail: (activeSession.data?.requested_rail ??
++            activeSession.data?.rail) as DoitChoice["rail"],
++          va_bank: activeSession.data?.va_bank as string | null,
++        }
++      : null
++  )
++
+   const searchParams = useSearchParams()
+   const router = useRouter()
+   const pathname = usePathname()
+@@ -79,7 +94,18 @@ const Payment = ({
+       const checkActiveSession =
+         activeSession?.provider_id === selectedPaymentMethod
+ 
+-      if (!checkActiveSession) {
++      if (isDoit(selectedPaymentMethod)) {
++        // New doit.id invoice only when the method changed; back here after the hosted page.
++        const res = await selectDoitMethod(
++          cart,
++          selectedPaymentMethod,
++          doitChoice!,
++          `${window.location.origin}${pathname}?step=review`
++        )
++        if (!res.ok) {
++          throw new Error(res.message)
++        }
++      } else if (!checkActiveSession) {
+         await initiatePaymentSession(cart, {
+           provider_id: selectedPaymentMethod,
+         })
+@@ -161,6 +187,15 @@ const Payment = ({
+                   </div>
+                 ))}
+               </RadioGroup>
++              {isDoit(selectedPaymentMethod) && (
++                <div className="mt-4">
++                  <DoitRailPicker
++                    cartId={cart.id}
++                    value={doitChoice}
++                    onChange={setDoitChoice}
++                  />
++                </div>
++              )}
+             </>
+           )}
+ 
+@@ -190,6 +225,7 @@ const Payment = ({
+             isLoading={isLoading}
+             disabled={
+               (isStripeLike(selectedPaymentMethod) && !cardComplete) ||
++              (isDoit(selectedPaymentMethod) && !doitChoice) ||
+               (!selectedPaymentMethod && !paidByGiftcard)
+             }
+             data-testid="submit-payment-button"

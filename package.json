@@ -46,6 +46,9 @@
     "prepublishOnly": "medusa plugin:build",
     "test": "jest",
     "test:unit": "jest",
+    "test:e2e": "npm run build && node integration-tests/run.mjs",
+    "test:sandbox": "npm run build && node integration-tests/run.mjs --sandbox",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p src/admin/tsconfig.json",
     "db:generate": "node scripts/require-spike-db.mjs npx medusa plugin:db:generate"
   },
   "devDependencies": {

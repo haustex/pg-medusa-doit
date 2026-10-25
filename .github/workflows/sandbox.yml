@@ -1,0 +1,57 @@
+name: Sandbox (real doit.id)
+
+# Manual only. Uses the repository secret DOIT_TEST_API_KEY (a pb_test_ key);
+# without it the job is skipped. Never runs on pull requests from forks.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sandbox:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: spike
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 56379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgres://postgres:spike@127.0.0.1:55432/doit_e2e
+      REDIS_URL: redis://127.0.0.1:56379
+      DOIT_TEST_API_KEY: ${{ secrets.DOIT_TEST_API_KEY }}
+    steps:
+      - name: Check for the sandbox key
+        id: key
+        run: |
+          if [ -z "$DOIT_TEST_API_KEY" ]; then
+            echo "::notice::DOIT_TEST_API_KEY is not set; skipping the sandbox tests."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.key.outputs.skip != 'true'
+        uses: actions/checkout@v4
+      - if: steps.key.outputs.skip != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            integration-tests/app/package-lock.json
+      - if: steps.key.outputs.skip != 'true'
+        run: npm ci --no-audit --no-fund && (cd integration-tests/app && npm ci --no-audit --no-fund)
+      - if: steps.key.outputs.skip != 'true'
+        run: npm run test:sandbox

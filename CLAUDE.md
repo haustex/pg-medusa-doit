@@ -166,6 +166,31 @@ Plugin open source (MIT) Medusa v2 (2.19.x) untuk payment gateway **doit.id** (P
   batang grafik dan kartu saldo, teks EN/ID (`src/admin/i18n/json`, kode bahasa Admin `id`), footer kredit di kedua
   halaman ("Bantuan"/"Help" mengikuti bahasa; disclaimer tetap Inggris).
 
+## Keputusan Fase 4 (tes, CI, storefront)
+
+- E2E di `integration-tests/`: `run.mjs` (guard: `DATABASE_URL` wajib 127.0.0.1:55432 dengan nama DB `doit_e2e*` karena
+  di-drop/dibuat ulang, `REDIS_URL` wajib 127.0.0.1:56379, port 9300/9301/9399 harus bebas) mem-pack plugin hasil build
+  ke `integration-tests/app/node_modules` (tanpa yalc), lalu per suite: reset DB → `db:migrate` + admin user lewat
+  `scripts/require-spike-db.mjs` → `node suites/NN-*.mjs`. Suite: 01 provider/webhook, 02 ledger/sync, 03 Admin,
+  04 store endpoints; `sandbox/05-sandbox.mjs` (`npm run test:sandbox`) hanya dengan `DOIT_TEST_API_KEY`,
+  bagian "lunas" hanya bila `WAIT_PAID_MS` > 0 (butuh klik "Simulasikan lunas" di portal; tidak ada API simulasi).
+  Mock doit.id `integration-tests/mock-doit.mjs` (environment `test`, fee di `/v1/methods?amount=`).
+- CI `.github/workflows/ci.yml` (push + PR): lint, typecheck (`tsc` server + `src/admin`), unit, build, dan E2E dengan
+  service Postgres/Redis di port 55432/56379 (port spike, supaya guard yang sama berlaku). `sandbox.yml` manual saja,
+  dilewati bila secret `DOIT_TEST_API_KEY` kosong. ESLint Medusa mengabaikan `examples/**` dan `integration-tests/**`.
+- Store API: `GET /store/doit/carts/:id/payment` (status + `next_action` wait|complete_cart|view_order|retry,
+  `poll_after_ms`) dan `GET /store/doit/methods[?cart_id=]` (GET /v1/methods disaring rail terdokumentasi, fee untuk total
+  cart, cache 5 menit). Akses: cart harus di sales channel publishable key; cart milik customer terdaftar hanya untuk
+  customer itu; selain itu 404. Respons hanya field tampilan (`toPublicPayment`, tanpa metadata/customer/flags/idempotency).
+  Status terbuka (pending/expired) dibaca ulang dari doit.id lewat `StatusRefresher`: maks 1×/10 dtk per payment,
+  request bersamaan digabung, anggaran 60 baca/menit per proses (sisa kuota 120/menit untuk webhook/sync). Endpoint
+  tetap read-only: storefront memanggil cart complete sendiri saat `complete_cart` (cart yang sudah selesai oleh webhook
+  mengembalikan order yang sama, teruji). Rate limit in-memory per proses: status 40/menit per cart + 120/menit per IP,
+  methods 20/menit per cart + 30/menit per IP → 429 `rate_limited` + `Retry-After`.
+- Contoh storefront `examples/nextjs-starter/` (Next.js Starter commit 9818886): file baru + `starter.patch` untuk
+  `constants.tsx`, `payment/index.tsx`, `payment-button/index.tsx`; QR lewat `qrcode.react` (SVG); teks di `labels.ts`.
+  Tanpa promo/branding Haus Kayu di storefront.
+
 ## Arsitektur
 
 ```
@@ -191,8 +216,12 @@ src/
   jobs/sync-doit-payments.ts cron */15 * * * * (DOIT_SYNC_CRON)
   api/hooks/                 middleware verifikasi signature + claim event
   api/admin/doit/...         settings, test-connection, stats, payments(+export), withdrawals(+import, [id]), attention([id]/resolve)
+  api/store/doit/...         carts/[id]/payment (status untuk polling), methods; lib/store-payment.ts, lib/store-rate-limit.ts
   admin/routes/doit/         Dashboard; admin/routes/settings/doit/ Settings; admin/components/ tab + grafik SVG
   scripts/require-spike-db.mjs  guard DB/Redis spike untuk perintah medusa (lihat Aturan kerja)
+integration-tests/           run.mjs, lib/ (guard, harness), suites/01–04, sandbox/05, mock-doit.mjs, app/ (host Medusa)
+examples/nextjs-starter/     komponen checkout doit untuk Medusa Next.js Starter + starter.patch
+.github/workflows/           ci.yml (push/PR), sandbox.yml (manual, butuh secret DOIT_TEST_API_KEY)
 ```
 
 Webhook: `POST /hooks/payment/doit_doit` → middleware plugin (signature, claim) → route core (queue) → subscriber plugin.
@@ -265,6 +294,11 @@ Hasil sandbox `pb_test_` (2026-10-25, Fase 1):
 - Replay Idempotency-Key dengan body berbeda → 200 dengan payment asli.
 - `GET /v1/payments` terbaru dulu; `before=<created_at>` eksklusif terhadap `created_at` (tanpa tumpang tindih).
 
+Checkout storefront (Fase 4, 2026-10-25): Next.js Starter (:9310, production build) + Medusa (:9300) + sandbox:
+pilih QRIS → QR tampil; ganti ke VA Mandiri → nomor VA + fee Rp4.000 (total 174.000); "Simulasikan lunas" di portal →
+polling melihat `paid` → `placeOrder` → order, capture 170.000 (amount, tanpa fee pembeli), tanpa webhook.
+Invoice QRIS yang ditinggalkan tetap pending di doit.id sampai kedaluwarsa (tidak ada endpoint cancel).
+
 Masih terbuka:
 - `bayar_ganda`: field mana yang memuat jumlah kelebihan bayar / instrumen kedua? `amount` tetap nominal tagihan?
   Webhook mana yang dikirim untuk pembayaran kedua (`payment.paid` lagi dengan id event baru?).
@@ -276,4 +310,4 @@ Masih terbuka:
 
 ## Status
 
-- [x] Fase 0 · [x] Fase 1 · [x] Fase 2 · [x] Fase 3 · [ ] Fase 4 · [ ] Fase 5
+- [x] Fase 0 · [x] Fase 1 · [x] Fase 2 · [x] Fase 3 · [x] Fase 4 · [ ] Fase 5
