@@ -341,4 +341,9 @@ Masih terbuka:
   `@medusajs/draft-order` (plugin bawaan 2.22, peer ui exact) nested di bawah `@medusajs/medusa` sehingga
   `db:migrate` gagal "Unable to resolve plugin". Script mengubah package.json/lock: lokal pulihkan dengan
   `git checkout` + `npm ci`.
+- Rilis via OIDC gagal 2× (0.1.1 akhirnya dipublish manual oleh user): E404 karena setup-node <v7 + `registry-url`
+  mengisi `NODE_AUTH_TOKEN` placeholder, lalu ENEEDAUTH tanpa token. npm melakukan exchange OIDC diam-diam (gagal hanya
+  di log `verbose`), jadi `release.yml` kini menjalankan exchange sendiri (`/-/npm/v1/oidc/token/exchange/package/<nama>`,
+  audience `npm:registry.npmjs.org`) dan mencetak claim (repository, workflow_ref, environment). `workflow_dispatch`
+  = cek saja, tanpa publish. npm `^11.21.0` (dist-tag via OIDC), actions v7 (Node 24).
 - [x] Fase 0 · [x] Fase 1 · [x] Fase 2 · [x] Fase 3 · [x] Fase 4 · [x] Fase 5 (siap rilis; publish npm + repo publik menunggu langkah manual user)

@@ -1,13 +1,18 @@
 name: Release
 
-# Publishes to npm when a tag v* is pushed. Uses npm trusted publishing (OIDC):
-# no NPM_TOKEN secret; the package on npmjs.com must list this repository and
-# this workflow file (release.yml) as its trusted publisher. Provenance is
-# attached automatically. The dist-tag comes from publishConfig.tag (beta).
+# Publishes to npm when a tag v* is pushed, through npm trusted publishing
+# (OIDC): no NPM_TOKEN secret. On npmjs.com the package's trusted publisher must
+# be GitHub Actions · haustex / pg-medusa-doit · workflow release.yml ·
+# environment npm (all case-sensitive). Provenance is attached automatically.
+#
+# Run it manually (workflow_dispatch) to check that configuration: it performs
+# the same OIDC token exchange npm does and reports npm's answer, without
+# building or publishing anything.
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -19,6 +24,7 @@ concurrency:
 jobs:
   verify:
     name: Verify (lint, typecheck, unit, E2E)
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     services:
@@ -42,8 +48,8 @@ jobs:
       DATABASE_URL: postgres://postgres:spike@127.0.0.1:55432/doit_e2e
       REDIS_URL: redis://127.0.0.1:56379
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -66,8 +72,13 @@ jobs:
       - run: npm run test:e2e
 
   publish:
-    name: Publish to npm
+    name: ${{ github.event_name == 'push' && 'Publish to npm' || 'Check npm trusted publishing' }}
     needs: verify
+    # tag push: after verify succeeded · manual run: the OIDC check only (verify is skipped)
+    if: >-
+      always() &&
+      ((github.event_name == 'push' && needs.verify.result == 'success') ||
+       (github.event_name == 'workflow_dispatch' && needs.verify.result == 'skipped'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: npm
@@ -75,22 +86,61 @@ jobs:
       contents: read
       id-token: write # OIDC token for npm trusted publishing + provenance
     steps:
-      - uses: actions/checkout@v4
-      # No registry-url here: with it, setup-node writes an .npmrc that sends
-      # NODE_AUTH_TOKEN (a placeholder when no secret is set) instead of using OIDC,
-      # and the registry answers 404.
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      # No registry-url: setup-node would write an .npmrc that sends NODE_AUTH_TOKEN
+      # (a placeholder before v7) instead of letting npm use OIDC. No dependency
+      # cache in the job that holds publish rights.
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
-      # Trusted publishing needs npm 11.5.1 or newer.
-      - run: npm install -g npm@^11.5.1
-      - run: npm ci --no-audit --no-fund
-      - run: npm run build
+          package-manager-cache: false
+      # Trusted publishing needs npm 11.5.1+; dist-tags over OIDC need 11.21.0+.
+      - run: npm install -g npm@^11.21.0
+      - run: node --version && npm --version
+
+      # npm performs this exchange silently and only logs failures at verbose level,
+      # then fails later with ENEEDAUTH or E404. Doing it here first shows npm's
+      # reason and the token claims it matches against. Nothing secret is printed.
+      - name: Check npm trusted publishing (OIDC exchange)
+        run: |
+          set -euo pipefail
+          if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+            echo "::error::No GitHub OIDC token available: the job needs 'permissions: id-token: write'."
+            exit 1
+          fi
+          NAME=$(node -p "require('./package.json').name")
+          ID_TOKEN=$(curl -fsS -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=npm:registry.npmjs.org" | node -pe 'JSON.parse(require("fs").readFileSync(0)).value')
+          echo "::add-mask::${ID_TOKEN}"
+          echo "Claims npm compares with the trusted publisher:"
+          node -e '
+            const c = JSON.parse(Buffer.from(process.argv[1].split(".")[1], "base64url"))
+            for (const k of ["repository", "repository_owner", "workflow_ref", "job_workflow_ref", "environment", "event_name", "ref", "repository_visibility", "runner_environment"])
+              console.log(`  ${k}: ${c[k] ?? "(none)"}`)' "${ID_TOKEN}"
+          OUT=$(mktemp)
+          STATUS=$(curl -sS -o "$OUT" -w '%{http_code}' -X POST -H "Authorization: Bearer ${ID_TOKEN}" \
+            "https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/${NAME}")
+          if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 300 ] && node -e 'process.exit(JSON.parse(require("fs").readFileSync(process.argv[1])).token ? 0 : 1)' "$OUT"; then
+            echo "npm accepted this workflow as trusted publisher of ${NAME}."
+            rm -f "$OUT"
+          else
+            MESSAGE=$(node -e 'try { const b = JSON.parse(require("fs").readFileSync(process.argv[1])); console.log(b.message ?? b.error ?? JSON.stringify(b)) } catch { console.log(require("fs").readFileSync(process.argv[1], "utf8").slice(0, 300)) }' "$OUT")
+            rm -f "$OUT"
+            echo "::error::npm refused the OIDC exchange for ${NAME} (HTTP ${STATUS}): ${MESSAGE}. Compare the claims above with the package's trusted publisher on npmjs.com."
+            exit 1
+          fi
+
+      - if: github.event_name == 'push'
+        run: npm ci --no-audit --no-fund
+      - if: github.event_name == 'push'
+        run: npm run build
       - name: Package contents
+        if: github.event_name == 'push'
         run: npm pack --dry-run
-      # The very first version is published by hand (a trusted publisher can only be
-      # added to a package that exists); its tag then only creates the release here.
+      # The very first version was published by hand (a trusted publisher can only be
+      # added to a package that exists); a tag for an existing version only re-verifies.
       - name: Skip if this version is already on npm
+        if: github.event_name == 'push'
         id: exists
         run: |
           VERSION=$(node -p "require('./package.json').version")
@@ -99,7 +149,7 @@ jobs:
             echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
       - name: Publish (dist-tag from publishConfig.tag)
-        if: steps.exists.outputs.skip != 'true'
+        if: github.event_name == 'push' && steps.exists.outputs.skip != 'true'
         run: |
           TAG=$(node -p "require('./package.json').publishConfig?.tag ?? 'latest'")
           npm publish --provenance --access public --tag "$TAG"

@@ -6,6 +6,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+
+- Release workflow: publishing through npm trusted publishing (OIDC) failed (`E404`, then `ENEEDAUTH`). The publish
+  job now uses npm 11.21+ (needed for dist-tags over OIDC) without setup-node's `registry-url` token, and first runs
+  npm's OIDC token exchange itself, failing with npm's reason and the token claims. It can be run manually
+  (`workflow_dispatch`) to check the npm configuration without publishing.
+
+### Changed
+
+- GitHub Actions upgraded to `actions/checkout@v7`, `actions/setup-node@v7` and `actions/upload-artifact@v7` (Node 24).
+
 ## [0.1.1] - 2026-10-25
 
 ### Changed
