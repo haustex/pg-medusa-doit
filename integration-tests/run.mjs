@@ -48,7 +48,7 @@ async function main() {
     throw new Error("Plugin is not built. Run `npm run build` first (npm run test:e2e does).")
   }
   if (!fs.existsSync(path.join(APP_DIR, "node_modules/@medusajs/medusa"))) {
-    run("npm", ["ci", "--no-audit", "--no-fund"])
+    run("npm", ["install", "--no-audit", "--no-fund"])
   }
   const packDir = path.join(APP_DIR, ".pack")
   fs.rmSync(packDir, { recursive: true, force: true })
