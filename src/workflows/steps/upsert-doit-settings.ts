@@ -17,6 +17,7 @@ export type UpsertDoitSettingsInput = {
   rail?: DoitRail
   va_bank?: string | null
   expires_in?: number
+  timezone?: string
 }
 
 type StoredSetting = Awaited<
@@ -42,6 +43,7 @@ export const upsertDoitSettingsStep = createStep(
     if (input.rail !== undefined) data.rail = input.rail
     if (input.va_bank !== undefined) data.va_bank = input.va_bank
     if (input.expires_in !== undefined) data.expires_in = input.expires_in
+    if (input.timezone !== undefined) data.timezone = input.timezone
 
     const writesSecret = !!input.api_key || !!input.webhook_secret
     if (writesSecret) {

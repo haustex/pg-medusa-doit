@@ -7,8 +7,13 @@ Plugin open source (MIT) Medusa v2 (2.19.x) untuk payment gateway **doit.id** (P
 
 ## Aturan kerja
 
-- **Server ini juga menjalankan toko produksi hauskayu. DILARANG mengirim request apa pun ke port 9000, 8001, 80, 443
-  atau domain *.hauskayu.com, dan DILARANG menjalankan pm2 restart/stop/delete untuk proses hk-*.**
+- **Server ini juga menjalankan toko produksi hauskayu. DILARANG mengirim request atau membuka koneksi apa pun ke port
+  9000, 8001, 80, 443, 5432 (Postgres produksi) dan 6379 (Redis produksi), atau domain *.hauskayu.com, dan DILARANG
+  menjalankan pm2 restart/stop/delete untuk proses hk-*.**
+- **Semua perintah `medusa` / `plugin:db:*` wajib memakai `DATABASE_URL` eksplisit ke DB spike
+  (`postgres://postgres:spike@127.0.0.1:55432/<db>`) dan Redis spike `127.0.0.1:56379`. Kalau env itu tidak di-set,
+  batalkan.** Di repo ini pakai `npm run db:generate` (dijaga `scripts/require-spike-db.mjs`, yang menolak env kosong,
+  host/port lain, `DB_HOST`/`DB_PORT` penimpa, dan Redis 6379).
   Tes hanya di port 9300+ dan container `doit-spike-*`. Cek port bebas sebelum start, batal kalau terpakai.
 - Kerjakan **per fase**. Setelah satu fase selesai (build + lint + tes hijau), berhenti dan tunggu "go" dari user.
 - **Jangan pernah commit API key / signing secret / kunci enkripsi.** Kredensial hanya lewat Admin (terenkripsi) atau env.
@@ -16,9 +21,10 @@ Plugin open source (MIT) Medusa v2 (2.19.x) untuk payment gateway **doit.id** (P
 - Ikuti skill `medusa-dev:building-with-medusa` (Module → Workflow → API route; mutasi lewat workflow; hanya GET/POST/DELETE;
   Zod dari `@medusajs/framework/zod` (v4); nama modul camelCase) dan `building-admin-dashboard-customizations` untuk UI.
 - Validasi: `npm run build` dan `npx medusa lint` setelah setiap perubahan berarti.
-- **Migrasi plugin:** `npx medusa plugin:db:generate` konek ke Postgres (default `localhost:5432` = DB produksi hauskayu!).
-  Selalu jalankan dengan `DB_HOST=127.0.0.1 DB_PORT=55432 DB_USERNAME=postgres DB_PASSWORD=spike` (container
-  `doit-spike-pg`; database `medusa-<modul>` dibuat dulu).
+- **Migrasi plugin:** `medusa plugin:db:generate` selalu mengirim `host=localhost port=5432 password=""` eksplisit, dan
+  itu **menimpa `DATABASE_URL`** (terjadi 2× di Fase 2–3: konek ke DB produksi, gagal auth). Jalankan hanya lewat
+  `DATABASE_URL=postgres://postgres:spike@127.0.0.1:55432/medusa-doit-ledger npm run db:generate`; guard menurunkan
+  `DB_HOST/DB_PORT/DB_USERNAME/DB_PASSWORD` dari URL lalu menjalankan perintahnya sendiri.
 - Medusa menyimpan harga apa adanya (Rp150.000 = `150000`). Jangan dikali/dibagi 100.
 
 ## Branding & identitas
@@ -136,6 +142,30 @@ Plugin open source (MIT) Medusa v2 (2.19.x) untuk payment gateway **doit.id** (P
 - Rail `cc` (muncul di pesan error sandbox) tidak ditawarkan sampai ada di dokumentasi resmi; `resolveRailBank` menolaknya.
   Rail `transfer` tetap di kode, ditandai "belum bisa dites di sandbox" di README.
 
+## Keputusan Fase 3 (Admin)
+
+- Halaman: `/app/doit` (Ringkasan · Transaksi · Withdraw · Perlu tindakan) dan `/app/settings/doit`. Semua lewat
+  `sdk.client.fetch` (session auth); route `/admin/doit/*` otomatis butuh admin login (401 tanpa sesi, teruji).
+- Agregasi di SQL (`modules/doitLedger/reports.ts`, dipanggil lewat method service `@InjectManager` + `getKnex()`):
+  kartu, seri harian (`to_char(paid_at at time zone tz)`), tabel (LIMIT/OFFSET + count), export (batch 1 000, maks 50 000).
+  Index tambahan: `doit_payment(paid_at)`, `(environment,status)`, `(order_id)`, `doit_refund(status,created_at)`,
+  `doit_withdrawal(date)`. Batas hari: `'YYYY-MM-DD'::timestamp at time zone tz`; preset dihitung di server
+  (`lib/date-range.ts`). Zona waktu di `doit_setting.timezone` (default Asia/Jakarta, divalidasi IANA).
+- Mode dashboard mengikuti prefix key yang aktif: `live` = env `live|production`, `test` = `test|sandbox`; data
+  tidak pernah dicampur. Withdraw menyimpan `environment` saat dicatat.
+- Kartu: Sukses (status paid/refunded menurut `paid_at`), Menunggu & Gagal/Kedaluwarsa (menurut `doit_created_at`),
+  Refund (doit_refund succeeded menurut `created_at`), Gross/Fee/Net, Withdraw (amount + fee). **Saldo estimasi =
+  net sukses − refund sukses − withdraw (amount + biaya payout), sepanjang waktu**, berlabel "Estimasi" + penjelasan.
+- Withdraw: manual (tanggal lokal `YYYY-MM-DD`, nominal, biaya payout, catatan) dan import CSV settlement. Format CSV
+  portal belum terdokumentasi → kolom dikenali dari nama header (ID/EN), `dry_run` dulu (pratinjau + kolom terdeteksi),
+  baris status gagal/pending dilewati, `external_ref` unik (`csv:<id>` atau hash isi baris) mencegah import ganda.
+- Export CSV: waktu lokal zona dashboard, BOM UTF-8, sel diawali `= + - @` diberi `'` (anti formula injection).
+- Tes koneksi: `GET /v1/methods` dengan key tersimpan atau key yang diketik (belum disimpan); rail di luar dokumentasi
+  (`cc`) disaring; peringatan bila prefix key ≠ environment dari doit.id.
+- UI: komponen `@medusajs/ui`, grafik SVG buatan sendiri, aksen jati Haus Kayu (`#8B5E3C` / dark `#C9925E`) hanya di
+  batang grafik dan kartu saldo, teks EN/ID (`src/admin/i18n/json`, kode bahasa Admin `id`), footer kredit di kedua
+  halaman ("Bantuan"/"Help" mengikuti bahasa; disclaimer tetap Inggris).
+
 ## Arsitektur
 
 ```
@@ -154,13 +184,15 @@ src/
   lib/doit-processing.ts     handleDoitWebhook, settlePaidPayment, handleMedusaRefund, checkRefundTotals
   lib/doit-sync.ts           job sync (scan, recheck, settle, stale events)
   modules/doitSettings/      kredensial + konfigurasi (AES-256-GCM, kunci dari env DOIT_ENCRYPTION_KEY)
-  modules/doitLedger/        payment, event, refund, attention, sync_state (withdrawal/settlement: Fase 3)
-  workflows/                 save-doit-settings, record-doit-ledger, claim-doit-event, save-doit-sync-state
+  modules/doitLedger/        payment, event, refund, attention, sync_state, withdrawal; reports.ts (SQL dashboard)
+  workflows/                 save-doit-settings, record-doit-ledger, claim-doit-event, save-doit-sync-state,
+                             doit-admin (create/delete withdrawal, import settlement, resolve attention)
   subscribers/               doit-settings-updated, doit-webhook-received, doit-payment-refunded
   jobs/sync-doit-payments.ts cron */15 * * * * (DOIT_SYNC_CRON)
   api/hooks/                 middleware verifikasi signature + claim event
-  api/admin/doit/...         settings (Fase 3: test-connection, stats, payments, attention, export, withdrawals, settlements)
-  admin/routes/doit/...      halaman Settings + Dashboard
+  api/admin/doit/...         settings, test-connection, stats, payments(+export), withdrawals(+import, [id]), attention([id]/resolve)
+  admin/routes/doit/         Dashboard; admin/routes/settings/doit/ Settings; admin/components/ tab + grafik SVG
+  scripts/require-spike-db.mjs  guard DB/Redis spike untuk perintah medusa (lihat Aturan kerja)
 ```
 
 Webhook: `POST /hooks/payment/doit_doit` → middleware plugin (signature, claim) → route core (queue) → subscriber plugin.
@@ -244,4 +276,4 @@ Masih terbuka:
 
 ## Status
 
-- [x] Fase 0 · [x] Fase 1 · [x] Fase 2 · [ ] Fase 3 · [ ] Fase 4 · [ ] Fase 5
+- [x] Fase 0 · [x] Fase 1 · [x] Fase 2 · [x] Fase 3 · [ ] Fase 4 · [ ] Fase 5

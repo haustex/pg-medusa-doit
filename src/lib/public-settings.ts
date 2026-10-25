@@ -18,8 +18,11 @@ export type PublicDoitSettings = {
   rail: DoitCredentials["rail"]
   va_bank: string | null
   expires_in: number
+  timezone: string
   encryption: DoitCredentials["encryption"]
   webhook_path: string
+  /** absolute URL to paste in the doit.id portal, when the backend URL is known */
+  webhook_url: string | null
   show_credit: boolean
 }
 
@@ -29,7 +32,8 @@ export type PublicDoitSettings = {
  */
 export function toPublicSettings(
   creds: DoitCredentials,
-  pluginOptions: Required<DoitPluginOptions> = { showCredit: true }
+  pluginOptions: Required<DoitPluginOptions> = { showCredit: true },
+  backendUrl: string | null = null
 ): PublicDoitSettings {
   return {
     configured: !!creds.apiKey,
@@ -46,11 +50,13 @@ export function toPublicSettings(
     rail: creds.rail,
     va_bank: creds.vaBank,
     expires_in: creds.expiresIn,
+    timezone: creds.timezone,
     encryption: {
       status: creds.encryption.status,
       message: creds.encryption.message,
     },
     webhook_path: WEBHOOK_PATH,
+    webhook_url: backendUrl ? `${backendUrl.replace(/\/+$/, "")}${WEBHOOK_PATH}` : null,
     show_credit: pluginOptions.showCredit,
   }
 }

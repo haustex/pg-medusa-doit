@@ -1,4 +1,5 @@
 import { Text } from "@medusajs/ui"
+import { useTranslation } from "react-i18next"
 import {
   CREDIT_URL,
   DISCLAIMER,
@@ -18,6 +19,7 @@ const linkClassName = "text-ui-fg-subtle hover:text-ui-fg-base transition-fg"
  * the credit and support link can be turned off with `showCredit: false`.
  */
 export const CreditFooter = ({ showCredit }: CreditFooterProps) => {
+  const { t } = useTranslation()
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 px-6 py-4">
       <Text size="xsmall" leading="compact" className="text-ui-fg-muted">
@@ -35,7 +37,7 @@ export const CreditFooter = ({ showCredit }: CreditFooterProps) => {
             rel="noopener noreferrer"
             className={linkClassName}
           >
-            Bantuan
+            {t("doit.footer.help", { defaultValue: "Bantuan" })}
           </a>
         </Text>
       )}

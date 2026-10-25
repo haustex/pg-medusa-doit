@@ -1,5 +1,6 @@
 import { z } from "@medusajs/framework/zod"
 import { TRANSFER_BANKS, VA_BANKS } from "../../../../lib/banks"
+import { isValidTimezone } from "../../../../lib/date-range"
 
 export { TRANSFER_BANKS, VA_BANKS }
 
@@ -11,6 +12,10 @@ export const PostAdminDoitSettings = z
     rail: z.enum(["any", "qris", "va", "transfer"]).optional(),
     va_bank: z.enum([...VA_BANKS, ...TRANSFER_BANKS]).nullish(),
     expires_in: z.number().int().min(60).optional(),
+    timezone: z
+      .string()
+      .refine(isValidTimezone, { message: "timezone harus nama zona IANA, mis. Asia/Jakarta" })
+      .optional(),
   })
   .refine((v) => v.rail !== "va" || v.va_bank === undefined || (VA_BANKS as readonly string[]).includes(v.va_bank ?? ""), {
     message: "va_bank harus salah satu kode VA (bmri, bnia, brin, cimb, permata, maybank, danamon, bsyi)",

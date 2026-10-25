@@ -65,6 +65,17 @@ payment session `data`. Only rails in the official doit.id documentation are off
 - Cases that need a person (double payment, payment after an order was canceled, refund totals that do not match,
   webhooks that failed after 3 attempts) are recorded as "perlu tindakan" items; nothing is refunded automatically.
 
+### Admin
+
+- **Settings → doit.id**: API key and webhook signing secret (stored encrypted, shown masked), detected test/live mode,
+  default method and bank, payment validity, dashboard time zone, **Test connection**, the webhook URL with a copy button
+  and the encryption-key status.
+- **doit.id** in the sidebar: Today / 7 days / This month / custom range (days in the time zone above); successful,
+  waiting, failed/expired and refund cards; gross, fee, net; withdrawals and an **estimated** balance
+  (net of successful payments − refunds − withdrawals); a daily chart; the transaction table with filters, search and
+  CSV export; withdrawals (manual or settlement CSV import); and the "needs action" list.
+- Everything is aggregated in the database; only admins who are logged in can open these pages and endpoints.
+
 ---
 
 ## Bahasa Indonesia
@@ -112,6 +123,17 @@ payment session. Hanya rail yang ada di dokumentasi resmi doit.id yang ditawarka
   masih pending di Medusa (misalnya karena webhook hilang).
 - Kasus yang perlu keputusan orang (bayar ganda, bayar setelah order dibatalkan, total refund tidak cocok, webhook yang
   gagal setelah 3 kali) dicatat sebagai item "perlu tindakan"; tidak ada refund otomatis.
+
+### Admin
+
+- **Pengaturan → doit.id**: API key dan webhook signing secret (disimpan terenkripsi, tampil tersamar), mode test/live
+  terdeteksi, metode dan bank default, masa berlaku tagihan, zona waktu dashboard, **Tes koneksi**, URL webhook dengan
+  tombol salin, dan status kunci enkripsi.
+- Menu **doit.id**: Hari ini / 7 hari / Bulan ini / rentang custom (batas hari mengikuti zona waktu di atas); kartu
+  sukses, menunggu, gagal/kedaluwarsa, dan refund; gross, fee, net; withdraw dan saldo **estimasi** (net pembayaran
+  sukses − refund − withdraw); grafik harian; tabel transaksi dengan filter, pencarian, dan export CSV; withdraw (manual
+  atau import CSV settlement); serta daftar "perlu tindakan".
+- Semua dihitung di database; halaman dan endpoint ini hanya bisa dibuka admin yang sudah login.
 
 ---
 

@@ -18,6 +18,8 @@ const DoitSetting = model.define("doit_setting", {
   rail: model.enum(["any", "qris", "va", "transfer"]).default("any"),
   va_bank: model.text().nullable(),
   expires_in: model.number().default(86400),
+  // IANA zone for day boundaries in the Admin dashboard
+  timezone: model.text().default("Asia/Jakarta"),
 })
 
 export default DoitSetting

@@ -1,0 +1,205 @@
+{
+  "doit": {
+    "nav": "doit.id",
+    "title": "Pembayaran doit.id",
+    "subtitle": "QRIS, Virtual Account, dan transfer bank lewat doit.id",
+    "mode": {
+      "live": "Live",
+      "test": "Test (sandbox)",
+      "unknown": "Belum dikonfigurasi"
+    },
+    "tabs": {
+      "overview": "Ringkasan",
+      "transactions": "Transaksi",
+      "withdrawals": "Withdraw",
+      "attention": "Perlu tindakan"
+    },
+    "range": {
+      "today": "Hari ini",
+      "7d": "7 hari",
+      "month": "Bulan ini",
+      "custom": "Rentang custom",
+      "from": "Dari",
+      "to": "Sampai",
+      "apply": "Terapkan",
+      "timezone": "Satu hari = 00:00–24:00 zona {{tz}}"
+    },
+    "cards": {
+      "success": "Sukses",
+      "pending": "Menunggu pembayaran",
+      "failed": "Gagal / kedaluwarsa",
+      "refunds": "Refund",
+      "gross": "Gross",
+      "fee": "Fee",
+      "net": "Net",
+      "withdrawals": "Withdraw",
+      "balance": "Saldo estimasi",
+      "balance_estimate": "Estimasi",
+      "balance_hint": "Net semua pembayaran sukses − refund − withdraw, sepanjang waktu. Bukan saldo resmi doit.id: cek portal sebelum mencairkan dana.",
+      "count_amount": "{{n}} · {{amount}}",
+      "in_range": "pada rentang terpilih"
+    },
+    "chart": {
+      "title": "Pembayaran sukses per hari",
+      "gross": "Gross",
+      "net": "Net",
+      "empty": "Belum ada pembayaran sukses di rentang ini",
+      "tooltip": "{{date}}: {{n}} pembayaran, gross {{gross}}, net {{net}}"
+    },
+    "table": {
+      "search": "Cari reference, order, atau id pembayaran",
+      "status": "Status",
+      "rail": "Metode",
+      "all": "Semua",
+      "export": "Export CSV",
+      "exporting": "Mengekspor…",
+      "empty": "Tidak ada transaksi yang cocok",
+      "created": "Dibuat",
+      "reference": "Reference / order",
+      "amount": "Nominal",
+      "fee": "Fee",
+      "net": "Net",
+      "refunded": "Direfund",
+      "flags": "Penanda"
+    },
+    "status": {
+      "paid": "Lunas",
+      "pending": "Menunggu",
+      "expired": "Kedaluwarsa",
+      "failed": "Gagal",
+      "refunded": "Direfund"
+    },
+    "flags": {
+      "bayar_telat": "Bayar telat",
+      "bayar_ganda": "Bayar ganda",
+      "lunas_manual": "Lunas manual"
+    },
+    "withdrawals": {
+      "title": "Withdraw",
+      "description": "Dana yang keluar dari saldo doit.id. Catat pencairan secara manual atau import CSV settlement dari portal doit.id.",
+      "add": "Tambah withdraw",
+      "import": "Import CSV settlement",
+      "date": "Tanggal",
+      "amount": "Nominal",
+      "fee": "Biaya payout",
+      "fee_hint": "doit.id memotong Rp10.000 per transfer pencairan. Isi 0 bila nominal di atas sudah termasuk biaya.",
+      "note": "Catatan",
+      "source": "Sumber",
+      "manual": "Manual",
+      "csv": "CSV",
+      "save": "Simpan",
+      "cancel": "Batal",
+      "delete": "Hapus",
+      "delete_confirm": "Hapus withdraw sebesar {{amount}}?",
+      "empty": "Belum ada withdraw yang dicatat",
+      "saved": "Withdraw disimpan",
+      "deleted": "Withdraw dihapus",
+      "csv_pick": "Pilih file CSV",
+      "csv_help": "Kolom dikenali dari namanya: tanggal/date, nominal/amount/jumlah/net, opsional biaya/fee, id/reference, status. Baris yang sudah pernah diimport dilewati.",
+      "csv_columns": "Kolom terdeteksi",
+      "csv_summary": "{{new}} baris baru ({{amount}}), {{dup}} sudah pernah diimport, {{skipped}} dilewati, {{errors}} error",
+      "csv_import": "Import {{count}} baris",
+      "csv_done": "{{count}} withdraw diimport",
+      "csv_line": "Baris",
+      "duplicate": "sudah diimport",
+      "csv_preview": "Pratinjau"
+    },
+    "attention": {
+      "title": "Perlu tindakan",
+      "description": "Kasus yang perlu keputusan orang. Tidak ada refund otomatis.",
+      "open": "Terbuka",
+      "resolved": "Selesai",
+      "dismissed": "Diabaikan",
+      "all": "Semua",
+      "empty": "Tidak ada yang perlu ditindaklanjuti",
+      "resolve": "Tandai selesai",
+      "dismiss": "Abaikan",
+      "note": "Catatan (apa yang sudah dilakukan?)",
+      "save": "Simpan",
+      "done": "Ditandai selesai",
+      "resolved_by": "{{status}} pada {{date}}",
+      "codes": {
+        "overpaid": "Bayar ganda",
+        "late_payment_canceled": "Dibayar setelah order dibatalkan",
+        "late_payment_flagged": "Dibayar setelah kedaluwarsa",
+        "paid_without_session": "Dibayar, tapi sesi checkout sudah tidak ada",
+        "superseded_invoice_paid": "Tagihan lama dibayar",
+        "amount_mismatch": "Nominal tidak cocok",
+        "refund_mismatch": "Total refund tidak cocok",
+        "refund_failed": "Refund gagal",
+        "webhook_failed": "Webhook gagal"
+      }
+    },
+    "settings": {
+      "title": "Pengaturan doit.id",
+      "description": "Kredensial disimpan terenkripsi. Secret tidak pernah ditampilkan lagi setelah disimpan.",
+      "credentials": "Kredensial",
+      "api_key": "API key",
+      "api_key_hint": "pb_test_… untuk sandbox, pb_live_… untuk live. Kosongkan untuk mempertahankan key saat ini.",
+      "webhook_secret": "Webhook signing secret",
+      "webhook_secret_hint": "Dari portal doit.id → Developer. Kosongkan untuk mempertahankan secret saat ini.",
+      "current": "Saat ini: {{value}}",
+      "not_set": "Belum diisi",
+      "source": "Sumber: {{source}}",
+      "sources": {
+        "admin": "Admin",
+        "options": "options medusa-config.ts",
+        "env": "environment variable",
+        "none": "tidak ada"
+      },
+      "mode": "Mode",
+      "mode_hint": "Terdeteksi dari awalan API key.",
+      "payment": "Pembayaran",
+      "rail": "Metode default",
+      "rails": {
+        "any": "Pembeli memilih (halaman hosted)",
+        "qris": "QRIS",
+        "va": "Virtual Account",
+        "transfer": "Transfer bank (Mutasi Rekening)"
+      },
+      "transfer_warning": "Transfer bank belum bisa dites di sandbox dan butuh live key dengan langganan Mutasi Rekening.",
+      "va_bank": "Bank",
+      "va_bank_hint": "Wajib untuk Virtual Account dan transfer bank.",
+      "expires_in": "Masa berlaku tagihan (menit)",
+      "timezone": "Zona waktu dashboard",
+      "timezone_hint": "Batas awal dan akhir hari di dashboard (nama zona IANA).",
+      "save": "Simpan pengaturan",
+      "saved": "Pengaturan disimpan",
+      "test": "Tes koneksi",
+      "testing": "Mengetes…",
+      "test_ok": "Terhubung dalam {{ms}} ms · {{env}}",
+      "test_failed": "Koneksi gagal: {{message}}",
+      "test_methods": "Metode aktif",
+      "test_mismatch": "Awalan key dan environment yang dilaporkan doit.id tidak cocok.",
+      "webhook": "Webhook",
+      "webhook_url": "URL webhook",
+      "webhook_url_hint": "Tempel di portal doit.id → Developer → Webhook URL.",
+      "copied": "Disalin",
+      "encryption": "Kunci enkripsi",
+      "encryption_status": {
+        "ok": "OK — secret tersimpan bisa dibaca",
+        "unused": "Belum diperlukan (belum ada secret tersimpan di Admin)",
+        "missing": "DOIT_ENCRYPTION_KEY belum di-set",
+        "malformed": "DOIT_ENCRYPTION_KEY bukan 64 karakter hex",
+        "mismatch": "DOIT_ENCRYPTION_KEY tidak cocok dengan secret tersimpan"
+      },
+      "remove": "Hapus",
+      "remove_hint": "Hapus nilai tersimpan"
+    },
+    "common": {
+      "loading": "Memuat…",
+      "error": "Terjadi kesalahan",
+      "retry": "Coba lagi"
+    },
+    "footer": {
+      "help": "Bantuan"
+    },
+    "pagination": {
+      "of": "dari",
+      "results": "hasil",
+      "pages": "halaman",
+      "prev": "Sebelumnya",
+      "next": "Berikutnya"
+    }
+  }
+}

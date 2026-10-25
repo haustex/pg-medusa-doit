@@ -19,6 +19,6 @@ const DoitRefund = model
     webhook_event_id: model.text().nullable(),
     raw: model.json().nullable(),
   })
-  .indexes([{ on: ["doit_payment_id"] }])
+  .indexes([{ on: ["doit_payment_id"] }, { on: ["status", "created_at"] }])
 
 export default DoitRefund

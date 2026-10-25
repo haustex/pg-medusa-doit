@@ -3,6 +3,7 @@ import { ContainerRegistrationKeys } from "@medusajs/framework/utils"
 import { resolveDoitCredentials } from "../../../../lib/credentials"
 import { getDoitPluginOptions } from "../../../../lib/plugin-options"
 import { toPublicSettings } from "../../../../lib/public-settings"
+import { backendUrlOf } from "../../../../lib/admin-context"
 import { saveDoitSettingsWorkflow } from "../../../../workflows/save-doit-settings"
 import type { PostAdminDoitSettingsType } from "./validators"
 
@@ -14,7 +15,8 @@ async function describeSettings(req: AuthenticatedMedusaRequest) {
   )
   return toPublicSettings(
     creds,
-    getDoitPluginOptions(req.scope.resolve(ContainerRegistrationKeys.CONFIG_MODULE))
+    getDoitPluginOptions(req.scope.resolve(ContainerRegistrationKeys.CONFIG_MODULE)),
+    backendUrlOf(req)
   )
 }
 

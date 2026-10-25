@@ -1,7 +1,7 @@
 {
   "name": "medusa-payment-doit",
   "version": "0.0.1",
-  "description": "doit.id payment gateway (QRIS, Virtual Account, bank transfer) for Medusa v2 — by Haus Kayu",
+  "description": "doit.id payment gateway (QRIS, Virtual Account, bank transfer) for Medusa v2 \u2014 by Haus Kayu",
   "author": "Haus Kayu <dev@hauskayu.com> (https://hauskayu.com)",
   "license": "MIT",
   "homepage": "https://github.com/haustex/pg-medusa-doit#readme",
@@ -45,7 +45,8 @@
     "lint": "medusa lint",
     "prepublishOnly": "medusa plugin:build",
     "test": "jest",
-    "test:unit": "jest"
+    "test:unit": "jest",
+    "db:generate": "node scripts/require-spike-db.mjs npx medusa plugin:db:generate"
   },
   "devDependencies": {
     "@medusajs/admin-sdk": "2.19.0",
@@ -53,6 +54,7 @@
     "@medusajs/eslint-plugin": "2.19.0",
     "@medusajs/framework": "2.19.0",
     "@medusajs/icons": "2.19.0",
+    "@medusajs/js-sdk": "2.19.0",
     "@medusajs/medusa": "2.19.0",
     "@medusajs/test-utils": "2.19.0",
     "@medusajs/ui": "4.2.1",
@@ -78,6 +80,7 @@
     "@medusajs/cli": "2.19.0",
     "@medusajs/framework": "2.19.0",
     "@medusajs/icons": "2.19.0",
+    "@medusajs/js-sdk": "2.19.0",
     "@medusajs/medusa": "2.19.0",
     "@medusajs/test-utils": "2.19.0",
     "@medusajs/ui": "4.2.1"

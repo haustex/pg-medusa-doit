@@ -73,6 +73,8 @@ export type DoitCredentials = {
   rail: DoitRail
   vaBank: string | null
   expiresIn: number
+  /** IANA zone for the Admin dashboard's day boundaries */
+  timezone: string
   encryption: {
     status: EncryptionStatus
     message: string | null
@@ -89,6 +91,7 @@ type StoredSettingRow = {
   rail: DoitRail | null
   va_bank: string | null
   expires_in: number | null
+  timezone?: string | null
 }
 
 type AdminLookup = {
@@ -178,6 +181,7 @@ export async function resolveDoitCredentials(
     rail: row?.rail ?? options.rail ?? "any",
     vaBank: row?.va_bank ?? options.va_bank ?? null,
     expiresIn: row?.expires_in ?? options.expires_in ?? 86400,
+    timezone: row?.timezone || "Asia/Jakarta",
     encryption: {
       status: admin.status,
       message: adminUnavailable ? ENCRYPTION_KEY_INVALID_MESSAGE : null,
@@ -226,7 +230,8 @@ async function readAdminSettings(
         "encryption_key_fingerprint",
         "rail",
         "va_bank",
-        "expires_in"
+        "expires_in",
+        "timezone"
       )
       .whereNull("deleted_at")
       .orderBy("updated_at", "desc")

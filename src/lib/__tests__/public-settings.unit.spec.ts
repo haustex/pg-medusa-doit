@@ -15,6 +15,7 @@ function creds(overrides: Partial<DoitCredentials> = {}): DoitCredentials {
     rail: "qris",
     vaBank: null,
     expiresIn: 86400,
+    timezone: "Asia/Jakarta",
     encryption: { status: "ok", message: null },
     adminUnavailable: false,
     ...overrides,
@@ -79,10 +80,20 @@ describe("toPublicSettings", () => {
         "expires_in",
         "rail",
         "show_credit",
+        "timezone",
         "va_bank",
         "webhook_path",
         "webhook_secret",
+        "webhook_url",
       ].sort()
     )
+  })
+
+  it("builds the webhook URL from the backend URL, without double slashes", () => {
+    expect(toPublicSettings(creds()).webhook_url).toBeNull()
+    expect(toPublicSettings(creds(), undefined, "https://api.toko.id/").webhook_url).toBe(
+      "https://api.toko.id/hooks/payment/doit_doit"
+    )
+    expect(toPublicSettings(creds()).timezone).toBe("Asia/Jakarta")
   })
 })

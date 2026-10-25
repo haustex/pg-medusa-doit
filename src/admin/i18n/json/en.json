@@ -1,0 +1,205 @@
+{
+  "doit": {
+    "nav": "doit.id",
+    "title": "doit.id payments",
+    "subtitle": "QRIS, Virtual Account and bank transfer through doit.id",
+    "mode": {
+      "live": "Live",
+      "test": "Test (sandbox)",
+      "unknown": "Not configured"
+    },
+    "tabs": {
+      "overview": "Overview",
+      "transactions": "Transactions",
+      "withdrawals": "Withdrawals",
+      "attention": "Needs action"
+    },
+    "range": {
+      "today": "Today",
+      "7d": "Last 7 days",
+      "month": "This month",
+      "custom": "Custom range",
+      "from": "From",
+      "to": "To",
+      "apply": "Apply",
+      "timezone": "Days run from 00:00 to 24:00 in {{tz}}"
+    },
+    "cards": {
+      "success": "Successful",
+      "pending": "Waiting for payment",
+      "failed": "Failed / expired",
+      "refunds": "Refunds",
+      "gross": "Gross",
+      "fee": "Fees",
+      "net": "Net",
+      "withdrawals": "Withdrawals",
+      "balance": "Estimated balance",
+      "balance_estimate": "Estimate",
+      "balance_hint": "Net of all successful payments − refunds − withdrawals, all time. Not your real doit.id balance: check the portal before withdrawing.",
+      "count_amount": "{{n}} · {{amount}}",
+      "in_range": "in the selected range"
+    },
+    "chart": {
+      "title": "Daily successful payments",
+      "gross": "Gross",
+      "net": "Net",
+      "empty": "No successful payments in this range",
+      "tooltip": "{{date}}: {{n}} payments, gross {{gross}}, net {{net}}"
+    },
+    "table": {
+      "search": "Search reference, order or payment id",
+      "status": "Status",
+      "rail": "Method",
+      "all": "All",
+      "export": "Export CSV",
+      "exporting": "Exporting…",
+      "empty": "No transactions match these filters",
+      "created": "Created",
+      "reference": "Reference / order",
+      "amount": "Amount",
+      "fee": "Fee",
+      "net": "Net",
+      "refunded": "Refunded",
+      "flags": "Flags"
+    },
+    "status": {
+      "paid": "Paid",
+      "pending": "Pending",
+      "expired": "Expired",
+      "failed": "Failed",
+      "refunded": "Refunded"
+    },
+    "flags": {
+      "bayar_telat": "Paid late",
+      "bayar_ganda": "Paid twice",
+      "lunas_manual": "Confirmed manually"
+    },
+    "withdrawals": {
+      "title": "Withdrawals",
+      "description": "Money taken out of your doit.id balance. Enter payouts by hand or import the settlement CSV from the doit.id portal.",
+      "add": "Add withdrawal",
+      "import": "Import settlement CSV",
+      "date": "Date",
+      "amount": "Amount",
+      "fee": "Payout fee",
+      "fee_hint": "doit.id charges Rp10.000 per payout transfer. Leave 0 if the amount above already includes it.",
+      "note": "Note",
+      "source": "Source",
+      "manual": "Manual",
+      "csv": "CSV",
+      "save": "Save",
+      "cancel": "Cancel",
+      "delete": "Delete",
+      "delete_confirm": "Delete this withdrawal of {{amount}}?",
+      "empty": "No withdrawals recorded yet",
+      "saved": "Withdrawal saved",
+      "deleted": "Withdrawal deleted",
+      "csv_pick": "Choose a CSV file",
+      "csv_help": "Columns are recognised by name: date/tanggal, amount/nominal/jumlah/net, optional fee/biaya, id/reference, status. Rows imported before are skipped.",
+      "csv_columns": "Detected columns",
+      "csv_summary": "{{new}} new rows ({{amount}}), {{dup}} already imported, {{skipped}} skipped, {{errors}} errors",
+      "csv_import": "Import {{count}} rows",
+      "csv_done": "{{count}} withdrawals imported",
+      "csv_line": "Line",
+      "duplicate": "already imported",
+      "csv_preview": "Preview"
+    },
+    "attention": {
+      "title": "Needs action",
+      "description": "Cases a person has to decide. Nothing is refunded automatically.",
+      "open": "Open",
+      "resolved": "Resolved",
+      "dismissed": "Dismissed",
+      "all": "All",
+      "empty": "Nothing needs your attention",
+      "resolve": "Mark as done",
+      "dismiss": "Dismiss",
+      "note": "Note (what did you do?)",
+      "save": "Save",
+      "done": "Marked as done",
+      "resolved_by": "{{status}} on {{date}}",
+      "codes": {
+        "overpaid": "Paid twice (bayar_ganda)",
+        "late_payment_canceled": "Paid after the order was canceled",
+        "late_payment_flagged": "Paid after expiry",
+        "paid_without_session": "Paid, but the checkout session is gone",
+        "superseded_invoice_paid": "Old invoice paid",
+        "amount_mismatch": "Amount does not match",
+        "refund_mismatch": "Refund totals do not match",
+        "refund_failed": "Refund failed",
+        "webhook_failed": "Webhook failed"
+      }
+    },
+    "settings": {
+      "title": "doit.id settings",
+      "description": "Credentials are stored encrypted. Secrets are never shown again after saving.",
+      "credentials": "Credentials",
+      "api_key": "API key",
+      "api_key_hint": "pb_test_… for sandbox, pb_live_… for live. Leave empty to keep the current key.",
+      "webhook_secret": "Webhook signing secret",
+      "webhook_secret_hint": "From the doit.id portal → Developer. Leave empty to keep the current secret.",
+      "current": "Current: {{value}}",
+      "not_set": "Not set",
+      "source": "Source: {{source}}",
+      "sources": {
+        "admin": "Admin",
+        "options": "medusa-config.ts options",
+        "env": "environment variables",
+        "none": "none"
+      },
+      "mode": "Mode",
+      "mode_hint": "Detected from the API key prefix.",
+      "payment": "Payment",
+      "rail": "Default method",
+      "rails": {
+        "any": "Customer chooses (hosted page)",
+        "qris": "QRIS",
+        "va": "Virtual Account",
+        "transfer": "Bank transfer (Mutasi Rekening)"
+      },
+      "transfer_warning": "Bank transfer cannot be tested on the sandbox yet and needs a live key with a Mutasi Rekening subscription.",
+      "va_bank": "Bank",
+      "va_bank_hint": "Required for Virtual Account and bank transfer.",
+      "expires_in": "Payment validity (minutes)",
+      "timezone": "Dashboard time zone",
+      "timezone_hint": "Where a day starts and ends in the dashboard (IANA name).",
+      "save": "Save settings",
+      "saved": "Settings saved",
+      "test": "Test connection",
+      "testing": "Testing…",
+      "test_ok": "Connected in {{ms}} ms · {{env}}",
+      "test_failed": "Connection failed: {{message}}",
+      "test_methods": "Active methods",
+      "test_mismatch": "The key prefix and the environment reported by doit.id do not match.",
+      "webhook": "Webhook",
+      "webhook_url": "Webhook URL",
+      "webhook_url_hint": "Paste this in the doit.id portal → Developer → Webhook URL.",
+      "copied": "Copied",
+      "encryption": "Encryption key",
+      "encryption_status": {
+        "ok": "OK — stored secrets can be read",
+        "unused": "Not needed yet (no secrets stored in the Admin)",
+        "missing": "DOIT_ENCRYPTION_KEY is not set",
+        "malformed": "DOIT_ENCRYPTION_KEY is not 64 hex characters",
+        "mismatch": "DOIT_ENCRYPTION_KEY does not match the stored secrets"
+      },
+      "remove": "Remove",
+      "remove_hint": "Remove the stored value"
+    },
+    "common": {
+      "loading": "Loading…",
+      "error": "Something went wrong",
+      "retry": "Retry"
+    },
+    "footer": {
+      "help": "Help"
+    },
+    "pagination": {
+      "of": "of",
+      "results": "results",
+      "pages": "pages",
+      "prev": "Prev",
+      "next": "Next"
+    }
+  }
+}

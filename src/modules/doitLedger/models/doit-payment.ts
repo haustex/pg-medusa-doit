@@ -34,6 +34,13 @@ const DoitPayment = model
     last_synced_at: model.dateTime().nullable(),
     raw: model.json().nullable(),
   })
-  .indexes([{ on: ["status"] }, { on: ["reference"] }, { on: ["doit_created_at"] }])
+  .indexes([
+    { on: ["status"] },
+    { on: ["reference"] },
+    { on: ["doit_created_at"] },
+    { on: ["paid_at"] },
+    { on: ["environment", "status"] },
+    { on: ["order_id"] },
+  ])
 
 export default DoitPayment
