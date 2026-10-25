@@ -10,7 +10,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
-- Metadata: keyword direktori integrasi Medusa (`medusa-plugin-integration`, `medusa-plugin-payment`).
+- Peer dependencies widened to `^2.19.0` for the `@medusajs/*` packages (and `^4.2.1` for `@medusajs/ui`, which has
+  its own versioning), so the plugin installs on newer Medusa 2.x releases without overrides. Development still uses
+  the 2.19.0 lock.
+- The npm package now includes `examples/nextjs-starter` (components, `starter.patch` and its README), so the
+  storefront example is available in `node_modules/medusa-payment-doit/examples/nextjs-starter` without cloning
+  the repository.
+- npm keywords for the Medusa integrations directory: `medusa-plugin-integration`, `medusa-plugin-payment`.
+
+### Added
+
+- CI matrix running the unit and E2E suites on Medusa 2.19.0 and 2.22.0, with the package built on the locked
+  2.19.0 toolchain. `scripts/use-medusa-version.mjs` switches a checkout to another Medusa release for this.
 
 ## [0.1.0] - 2026-10-25
 

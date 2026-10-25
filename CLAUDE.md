@@ -334,4 +334,11 @@ Masih terbuka:
 
 ## Status
 
+- 0.1.1: peerDependencies `@medusajs/*` `^2.19.0` (`@medusajs/ui` `^4.2.1`, versi sendiri), devDependencies tetap
+  2.19.0; `examples/nextjs-starter` ikut paket npm; CI matrix unit + E2E pada Medusa 2.19.0 dan 2.22.0 (build selalu
+  dengan toolchain 2.19). `scripts/use-medusa-version.mjs --write <v>` mengganti pin `@medusajs/*` (ui ikut versi dari
+  `@medusajs/dashboard@<v>`), menghapus entri `@medusajs/*` di lock, lalu `npm install`. Tanpa itu npm menaruh
+  `@medusajs/draft-order` (plugin bawaan 2.22, peer ui exact) nested di bawah `@medusajs/medusa` sehingga
+  `db:migrate` gagal "Unable to resolve plugin". Script mengubah package.json/lock: lokal pulihkan dengan
+  `git checkout` + `npm ci`.
 - [x] Fase 0 · [x] Fase 1 · [x] Fase 2 · [x] Fase 3 · [x] Fase 4 · [x] Fase 5 (siap rilis; publish npm + repo publik menunggu langkah manual user)

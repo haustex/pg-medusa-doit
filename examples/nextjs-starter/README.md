@@ -1,7 +1,7 @@
 # doit.id checkout for the Medusa Next.js Starter
 
 Drop-in files for [`nextjs-starter-medusa`](https://github.com/medusajs/nextjs-starter-medusa)
-(tested against commit `9818886`, Next.js 15, Medusa 2.19) that add a doit.id payment step:
+(tested against commit `9818886`, Next.js 15, Medusa 2.19; the store endpoints it uses run in CI on Medusa 2.19 and 2.22) that add a doit.id payment step:
 
 - **Pick a method**: QRIS or a Virtual Account bank. Only methods doit.id has active for your key are
   listed, each with the fee and the total to pay for this cart (`GET /store/doit/methods`). Methods outside their
@@ -21,7 +21,7 @@ restyle or translate it in one place.
 
 | QRIS | Virtual Account |
 | --- | --- |
-| ![QRIS](../../docs/screenshots/storefront-qris.jpg) | ![VA](../../docs/screenshots/storefront-va.jpg) |
+| ![QRIS](https://raw.githubusercontent.com/haustex/pg-medusa-doit/main/docs/screenshots/storefront-qris.jpg) | ![VA](https://raw.githubusercontent.com/haustex/pg-medusa-doit/main/docs/screenshots/storefront-va.jpg) |
 
 ## Install
 
@@ -33,7 +33,8 @@ restyle or translate it in one place.
    npm install qrcode.react@^4.2.0
    ```
 
-3. Copy `src/` from this folder over your storefront's `src/`. It only adds new files:
+3. Copy `src/` from this folder over your storefront's `src/` (it is also in the npm package:
+   `node_modules/medusa-payment-doit/examples/nextjs-starter/src`). It only adds new files:
 
    ```
    src/lib/data/doit.ts                                     server actions (SDK calls)

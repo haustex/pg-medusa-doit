@@ -29,9 +29,14 @@ jobs:
       - run: npm run build
 
   e2e:
-    name: E2E (Postgres + Redis + mock doit.id)
+    name: Unit + E2E on Medusa ${{ matrix.medusa }}
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        # 2.19.0 = the locked versions (and the peerDependencies floor); newer releases are switched in.
+        medusa: ["2.19.0", "2.22.0"]
     # Same ports as the spike containers the runner insists on; no real doit.id key is used.
     services:
       postgres:
@@ -66,10 +71,20 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm ci --no-audit --no-fund
         working-directory: integration-tests/app
-      - run: npm run test:e2e
+      # The published package is built with the locked toolchain; it is then run on each release.
+      - run: npm run build
+      - name: Switch to Medusa ${{ matrix.medusa }}
+        if: matrix.medusa != '2.19.0'
+        run: node scripts/use-medusa-version.mjs --write ${{ matrix.medusa }} . integration-tests/app
+      - name: Installed Medusa
+        run: |
+          node -p "'root ' + require('./node_modules/@medusajs/medusa/package.json').version"
+          node -p "'host app ' + require('./integration-tests/app/node_modules/@medusajs/medusa/package.json').version"
+      - run: npm run test:unit
+      - run: node integration-tests/run.mjs
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-logs
+          name: e2e-logs-medusa-${{ matrix.medusa }}
           path: e2e-logs
           retention-days: 7

@@ -5,7 +5,7 @@
 
 [![npm](https://img.shields.io/npm/v/medusa-payment-doit/beta?label=npm%40beta)](https://www.npmjs.com/package/medusa-payment-doit)
 [![CI](https://github.com/haustex/pg-medusa-doit/actions/workflows/ci.yml/badge.svg)](https://github.com/haustex/pg-medusa-doit/actions/workflows/ci.yml)
-[![Medusa](https://img.shields.io/badge/Medusa-2.19-7c3aed)](https://medusajs.com)
+[![Medusa](https://img.shields.io/badge/Medusa-2.19%20%E2%80%93%202.22-7c3aed)](https://medusajs.com)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 ```bash
@@ -32,7 +32,7 @@ More: [settings](https://raw.githubusercontent.com/haustex/pg-medusa-doit/main/d
 
 ### Features
 
-- **Payment provider** for Medusa 2.19: QRIS, Virtual Account (8 banks), the doit.id hosted page (`any`), and bank
+- **Payment provider** for Medusa 2.19+: QRIS, Virtual Account (8 banks), the doit.id hosted page (`any`), and bank
   transfer (`transfer`, see [Limitations](#limitations)). Amounts are whole rupiah, exactly as Medusa stores them.
 - **Credentials in the Admin**, encrypted with AES-256-GCM. Falls back to provider options or env vars.
 - **Webhooks**: signature checked on the raw body (HMAC-SHA256, ±5 min), deduplicated by event id in the database,
@@ -50,7 +50,7 @@ More: [settings](https://raw.githubusercontent.com/haustex/pg-medusa-doit/main/d
 
 ### Requirements
 
-- Medusa **2.19.x**, Node 20.19+ or 22.12+
+- Medusa **2.19 or newer 2.x** (tested in CI on 2.19.0 and 2.22.0), Node 20.19+ or 22.12+
 - Redis for the event bus, workflow engine and locking (strongly recommended; webhooks are processed in the worker)
 - A doit.id account: `pb_test_…` key for the sandbox, `pb_live_…` for production
 
@@ -162,7 +162,8 @@ for the status, 20/min per cart and 30/min per IP for methods (in memory, per se
 once per 10 seconds per payment.
 
 **Medusa Next.js Starter:** copy-in components and a patch in
-[`examples/nextjs-starter`](examples/nextjs-starter/README.md).
+[`examples/nextjs-starter`](examples/nextjs-starter/README.md), also shipped in the npm package
+(`node_modules/medusa-payment-doit/examples/nextjs-starter`).
 
 Switching method creates a new invoice. Switching back to a method whose invoice is still open (same cart, same amount,
 VA with ≥5 minutes left, QRIS whose QR is still issued) reuses that invoice.
@@ -211,7 +212,7 @@ Report vulnerabilities privately: see [SECURITY.md](SECURITY.md).
 
 ### Fitur
 
-- **Payment provider** untuk Medusa 2.19: QRIS, Virtual Account (8 bank), halaman bayar hosted doit.id (`any`), dan
+- **Payment provider** untuk Medusa 2.19+: QRIS, Virtual Account (8 bank), halaman bayar hosted doit.id (`any`), dan
   transfer bank (`transfer`, lihat [Batasan](#batasan)). Nominal rupiah utuh, persis seperti disimpan Medusa.
 - **Kredensial di Admin**, terenkripsi AES-256-GCM, dengan cadangan dari options provider atau env.
 - **Webhook**: signature dicek pada raw body (HMAC-SHA256, ±5 menit), dedupe per event id di database, diproses worker
@@ -228,7 +229,7 @@ Report vulnerabilities privately: see [SECURITY.md](SECURITY.md).
 
 ### Kebutuhan
 
-- Medusa **2.19.x**, Node 20.19+ atau 22.12+
+- Medusa **2.19 atau 2.x yang lebih baru** (dites di CI pada 2.19.0 dan 2.22.0), Node 20.19+ atau 22.12+
 - Redis untuk event bus, workflow engine, dan locking (sangat disarankan; webhook diproses di worker)
 - Akun doit.id: key `pb_test_…` untuk sandbox, `pb_live_…` untuk produksi
 
@@ -314,7 +315,8 @@ Aturan akses: cart harus milik sales channel publishable key, dan cart customer 
 methods 20/menit per cart dan 30/menit per IP (di memori, per proses server). doit.id dibaca paling sering sekali per
 10 detik per pembayaran.
 
-**Medusa Next.js Starter:** komponen dan patch di [`examples/nextjs-starter`](examples/nextjs-starter/README.md).
+**Medusa Next.js Starter:** komponen dan patch di [`examples/nextjs-starter`](examples/nextjs-starter/README.md),
+ikut di paket npm (`node_modules/medusa-payment-doit/examples/nextjs-starter`).
 
 Ganti metode membuat invoice baru. Kembali ke metode yang invoice-nya masih aktif (cart dan nominal sama, VA sisa ≥5
 menit, QRIS yang QR-nya masih terbit) memakai ulang invoice itu.
