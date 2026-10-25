@@ -86,5 +86,16 @@ jobs:
       - run: npm run build
       - name: Package contents
         run: npm pack --dry-run
+      # The very first version is published by hand (a trusted publisher can only be
+      # added to a package that exists); its tag then only creates the release here.
+      - name: Skip if this version is already on npm
+        id: exists
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "medusa-payment-doit@${VERSION}" version >/dev/null 2>&1; then
+            echo "::notice::medusa-payment-doit@${VERSION} is already published; skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Publish (dist-tag from publishConfig.tag)
+        if: steps.exists.outputs.skip != 'true'
         run: npm publish --provenance --access public
