@@ -78,6 +78,7 @@ describe("toPublicSettings", () => {
         "environment",
         "expires_in",
         "rail",
+        "show_credit",
         "va_bank",
         "webhook_path",
         "webhook_secret",

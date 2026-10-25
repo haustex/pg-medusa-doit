@@ -1,5 +1,6 @@
 import type { DoitCredentials } from "./credentials"
 import { maskSecret } from "./mask"
+import type { DoitPluginOptions } from "./plugin-options"
 
 export const WEBHOOK_PATH = "/hooks/payment/doit_doit"
 
@@ -19,13 +20,17 @@ export type PublicDoitSettings = {
   expires_in: number
   encryption: DoitCredentials["encryption"]
   webhook_path: string
+  show_credit: boolean
 }
 
 /**
  * The only shape in which settings leave the server. Built field by field
  * (never by spreading `creds`) so a new secret field can't leak by accident.
  */
-export function toPublicSettings(creds: DoitCredentials): PublicDoitSettings {
+export function toPublicSettings(
+  creds: DoitCredentials,
+  pluginOptions: Required<DoitPluginOptions> = { showCredit: true }
+): PublicDoitSettings {
   return {
     configured: !!creds.apiKey,
     credential_source: creds.source,
@@ -46,5 +51,6 @@ export function toPublicSettings(creds: DoitCredentials): PublicDoitSettings {
       message: creds.encryption.message,
     },
     webhook_path: WEBHOOK_PATH,
+    show_credit: pluginOptions.showCredit,
   }
 }

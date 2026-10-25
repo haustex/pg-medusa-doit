@@ -1,9 +1,17 @@
-# medusa-payment-doit
+# PG Medusa Doit.id
 
-Medusa v2 payment provider for [doit.id](https://doit.id) (QRIS, Virtual Account, bank transfer).
+**Terima QRIS, VA, dan transfer di Medusa lewat doit.id. Dibuat dan dipakai sendiri oleh Haus Kayu.**
+<br>Accept QRIS, Virtual Account and bank transfer in Medusa v2 through doit.id. Built and used in production by Haus Kayu.
 
-> **Not an official doit.id product.** This is an independent, community-maintained open source plugin (MIT).
-> **Bukan produk resmi doit.id.** Plugin ini dibuat dan dirawat komunitas secara independen (MIT).
+[![npm](https://img.shields.io/npm/v/medusa-payment-doit)](https://www.npmjs.com/package/medusa-payment-doit)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
+```bash
+npm install medusa-payment-doit
+```
+
+> **Community plugin, not an official doit.id product.** Independent open source (MIT), not affiliated with or endorsed by doit.id.
+> **Plugin komunitas, bukan produk resmi doit.id.** Open source independen (MIT), tidak berafiliasi dengan doit.id.
 
 > 🚧 Work in progress. Full documentation comes with the first release.
 
@@ -61,6 +69,43 @@ DOIT_ENCRYPTION_KEY=<hasil openssl rand -hex 32>
 
 ---
 
+## Used in production
+
+- [hauskayu.com](https://hauskayu.com/?utm_source=github&utm_medium=readme&utm_campaign=pg-medusa-doit), Haus Kayu's own store.
+
+Using this plugin in your store? Open a pull request to add it here.
+<br>Pakai plugin ini di tokomu? Kirim pull request untuk menambahkannya di sini.
+
+## About Haus Kayu
+
+[Haus Kayu](https://hauskayu.com/?utm_source=github&utm_medium=readme&utm_campaign=pg-medusa-doit) makes handcrafted
+teak kitchenware and furniture in Jepara, Indonesia. We built this plugin for our own Medusa store and share it so other
+Indonesian merchants don't have to start from scratch.
+
+Haus Kayu membuat perkakas dapur dan furnitur jati buatan tangan dari Jepara. Plugin ini kami buat untuk toko Medusa kami
+sendiri dan kami bagikan supaya merchant Indonesia lain tidak perlu mulai dari nol.
+
+## Support
+
+- Bugs & feature requests: [GitHub Issues](https://github.com/haustex/pg-medusa-doit/issues)
+- Email: [dev@hauskayu.com](mailto:dev@hauskayu.com)
+- WhatsApp: [chat with Haus Kayu](https://wa.me/6285111663330?text=Halo%20Haus%20Kayu%2C%20saya%20mau%20tanya%20soal%20PG%20Medusa%20Doit.id)
+
+For questions about your doit.id account, fees or settlement, contact doit.id directly at care@doit.id.
+<br>Untuk pertanyaan soal akun doit.id, biaya, atau pencairan dana, hubungi doit.id langsung di care@doit.id.
+
+### Admin credit / Kredit di Admin
+
+The plugin's own Admin pages show a small "PG Medusa Doit.id · by Haus Kayu" footer with a help link. It is plain
+links only: no tracking, no scripts, and nothing is shown on your storefront or checkout. Turn it off with:
+
+```ts
+// medusa-config.ts
+plugins: [{ resolve: "medusa-payment-doit", options: { showCredit: false } }]
+```
+
+The disclaimer stays visible. / Disclaimer tetap tampil.
+
 ## License
 
-MIT
+[MIT](LICENSE) © Haus Kayu

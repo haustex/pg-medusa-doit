@@ -35,6 +35,7 @@ async function callGet(row: Record<string, unknown> | undefined) {
   const services: Record<string, unknown> = {
     [ContainerRegistrationKeys.PG_CONNECTION]: fakePg(row),
     [ContainerRegistrationKeys.LOGGER]: { warn: jest.fn() },
+    [ContainerRegistrationKeys.CONFIG_MODULE]: { plugins: [] },
   }
   const req = { scope: { resolve: (name: string) => services[name] } }
   const res = { json: jest.fn() }

@@ -1,9 +1,18 @@
 {
   "name": "medusa-payment-doit",
   "version": "0.0.1",
-  "description": "A starter for Medusa plugins.",
-  "author": "Medusa (https://medusajs.com)",
+  "description": "doit.id payment gateway (QRIS, Virtual Account, bank transfer) for Medusa v2 — by Haus Kayu",
+  "author": "Haus Kayu <dev@hauskayu.com> (https://hauskayu.com)",
   "license": "MIT",
+  "homepage": "https://github.com/haustex/pg-medusa-doit#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/haustex/pg-medusa-doit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/haustex/pg-medusa-doit/issues",
+    "email": "dev@hauskayu.com"
+  },
   "files": [
     ".medusa/server"
   ],
@@ -22,10 +31,13 @@
   },
   "keywords": [
     "medusa",
-    "plugin",
-    "medusa-plugin-other",
     "medusa-plugin",
-    "medusa-v2"
+    "medusa-v2",
+    "payment",
+    "doit",
+    "qris",
+    "virtual-account",
+    "indonesia"
   ],
   "scripts": {
     "build": "medusa plugin:build",

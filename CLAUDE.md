@@ -1,5 +1,6 @@
-# medusa-payment-doit
+# PG Medusa Doit.id
 
+**PG Medusa Doit.id** by Haus Kayu, paket npm `medusa-payment-doit`, repo https://github.com/haustex/pg-medusa-doit.
 Plugin open source (MIT) Medusa v2 (2.19.x) untuk payment gateway **doit.id** (PayBridge API).
 **Bukan produk resmi doit.id.** Sumber API: https://doit.id/docs/ (HTML, lebih lengkap) dan https://doit.id/docs/llms.txt
 (keduanya dibaca 2026-10-25). Kalau keduanya berbeda, ikuti halaman HTML.
@@ -16,6 +17,18 @@ Plugin open source (MIT) Medusa v2 (2.19.x) untuk payment gateway **doit.id** (P
   Zod dari `@medusajs/framework/zod` (v4); nama modul camelCase) dan `building-admin-dashboard-customizations` untuk UI.
 - Validasi: `npm run build` dan `npx medusa lint` setelah setiap perubahan berarti.
 - Medusa menyimpan harga apa adanya (Rp150.000 = `150000`). Jangan dikali/dibagi 100.
+
+## Branding & identitas
+
+- Git identity repo ini (sudah di `git config` lokal): `Haus Kayu <dev@hauskayu.com>`. Branch utama `main`.
+- Nama tampilan "PG Medusa Doit.id" by Haus Kayu; paket npm tetap `medusa-payment-doit`.
+- Promo Haus Kayu **halus saja**: README (tagline, "Used in production", "About Haus Kayu", "Support") dan footer di halaman
+  plugin sendiri di Admin (`src/admin/components/credit-footer.tsx`, link di `src/admin/lib/branding.ts`).
+- Footer Admin: "PG Medusa Doit.id · by Haus Kayu" + link "Bantuan" (WhatsApp). Bisa dimatikan lewat option plugin
+  `showCredit` (default `true`), diteruskan ke UI sebagai `show_credit` di `GET /admin/doit/settings`.
+- **Tanpa tracking** (hanya link biasa dengan UTM, tanpa script/pixel/request ke hauskayu.com), **tanpa promo apa pun di
+  storefront/checkout pembeli**, dan disclaimer "Community plugin, not an official doit.id product" selalu tampil
+  (juga saat `showCredit: false`).
 
 ## Fakta API doit.id (ringkas)
 
@@ -133,13 +146,15 @@ server+worker terpisah, dan kunci enkripsi hilang/rusak/salah. Lihat "Keputusan 
 - Dashboard: filter hari/minggu/bulan/custom; kartu sukses/menunggu/gagal/refund; gross/fee/net; saldo estimasi
   (net paid − refund − withdraw − settlement terimport, fee payout Rp10.000/transfer); withdraw manual; import CSV settlement;
   grafik harian; export CSV. Zona waktu Asia/Jakarta.
+- Setiap halaman plugin memakai `<CreditFooter showCredit={settings.show_credit} />` di bagian bawah.
 
 ### Fase 4 — Tes
 - Unit (jest + @swc/jest): signature (valid, salah, t kedaluwarsa, header rusak, panjang beda), mapping status, validasi amount/currency.
 - Integrasi (`@medusajs/test-utils`, skip otomatis tanpa `DOIT_TEST_API_KEY`): create → get → list sandbox, webhook end-to-end.
 
 ### Fase 5 — Rilis
-- README EN + ID (instalasi, konfigurasi, webhook, disclaimer "not an official doit.id product"), CHANGELOG (Keep a Changelog),
+- README EN + ID (instalasi, konfigurasi, webhook, disclaimer "Community plugin, not an official doit.id product",
+  section branding yang sudah ada tetap dipertahankan), CHANGELOG (Keep a Changelog),
   GitHub Actions: CI (build/lint/test) + publish npm `--provenance` saat tag `v*` (permissions `id-token: write`).
 
 ## Pertanyaan terbuka
