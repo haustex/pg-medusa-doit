@@ -76,10 +76,12 @@ jobs:
       id-token: write # OIDC token for npm trusted publishing + provenance
     steps:
       - uses: actions/checkout@v4
+      # No registry-url here: with it, setup-node writes an .npmrc that sends
+      # NODE_AUTH_TOKEN (a placeholder when no secret is set) instead of using OIDC,
+      # and the registry answers 404.
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          registry-url: https://registry.npmjs.org
       # Trusted publishing needs npm 11.5.1 or newer.
       - run: npm install -g npm@^11.5.1
       - run: npm ci --no-audit --no-fund
@@ -98,4 +100,6 @@ jobs:
           fi
       - name: Publish (dist-tag from publishConfig.tag)
         if: steps.exists.outputs.skip != 'true'
-        run: npm publish --provenance --access public
+        run: |
+          TAG=$(node -p "require('./package.json').publishConfig?.tag ?? 'latest'")
+          npm publish --provenance --access public --tag "$TAG"
