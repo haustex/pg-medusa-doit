@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-25
+
+### Changed
+
+- Metadata: keyword direktori integrasi Medusa (`medusa-plugin-integration`, `medusa-plugin-payment`).
+
 ## [0.1.0] - 2026-10-25
 
 First public beta (`npm install medusa-payment-doit@beta`). Requires Medusa 2.19.x.
@@ -37,5 +43,6 @@ First public beta (`npm install medusa-payment-doit@beta`). Requires Medusa 2.19
 - Example components for the Medusa Next.js Starter (`examples/nextjs-starter`).
 - E2E suites against a mock doit.id and an opt-in sandbox suite; CI on every push and pull request.
 
-[Unreleased]: https://github.com/haustex/pg-medusa-doit/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/haustex/pg-medusa-doit/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/haustex/pg-medusa-doit/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/haustex/pg-medusa-doit/releases/tag/v0.1.0
