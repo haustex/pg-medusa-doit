@@ -83,7 +83,7 @@ http
         if (amount === null) return x
         const fee = feeOf(x, amount)
         const within = (x.min_amount === null || amount >= x.min_amount) && (x.max_amount === null || amount <= x.max_amount)
-        return { ...x, fee_amount: fee, total_amount: amount + (x.fee_payer === "customer" ? fee : 0), within_limits: within, limit: null }
+        return { ...x, fee_amount: fee, total_amount: amount + (x.fee_payer === "customer" ? fee : 0), within_limits: within, limit: within ? null : `maks Rp${x.max_amount}` }
       })
       return send(res, 200, { environment: "test", amount, data })
     }

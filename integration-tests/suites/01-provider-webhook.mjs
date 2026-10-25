@@ -92,6 +92,20 @@ await runSuite(async () => {
   const tooMuch = await api("POST", `/admin/payments/${payment?.id}/refund`, { amount: 100001 })
   check("refund above the remaining amount refused by the plugin", tooMuch.status >= 400, `status ${tooMuch.status}`)
 
+  // --- reused invoice paid by webhook: its reference is an earlier, deleted session
+  const ru = await newCart(region.id, variantId)
+  const firstId = ru.session.data.id
+  const firstSession = ru.session.id
+  const again2 = async (data) => (await api("POST", `/store/payment-collections/${ru.pc.id}/payment-sessions`, { provider_id: "pp_doit_doit", data }, { store: true })).json.payment_collection?.payment_sessions?.[0]
+  await again2({ rail: "va", va_bank: "bmri" })
+  const reusedSession = await again2({ rail: "qris" })
+  check("QRIS → VA → QRIS reuses the first invoice in a new session", reusedSession?.data?.id === firstId && reusedSession.id !== firstSession)
+  await mockSet(firstId, { status: "paid", paid_at: new Date().toISOString() })
+  const reusedPaid = await mockPayment(firstId, API_KEY)
+  check("doit.id still references the first session", reusedPaid.reference === firstSession)
+  check("payment.paid for the reused invoice → 200", (await hook({ id: evtId("r"), type: "payment.paid", data: reusedPaid })).status === 200)
+  check("webhook finds the current session through the collection → order", !!(await waitFor(() => cartDone(ru.cart.id), 60_000)), worker.log().split("\n").filter((l) => l.includes(firstId)).slice(-2).join(" | "))
+
   // --- bayar_telat (accept): expired → paid late
   const c2 = await newCart(region.id, variantId)
   await mockSet(c2.session.data.id, { status: "expired" })

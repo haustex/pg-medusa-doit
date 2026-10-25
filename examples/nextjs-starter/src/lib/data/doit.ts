@@ -19,6 +19,9 @@ export type DoitMethod = {
   fee_payer: string | null
   fee_amount: number | null
   total_amount: number | null
+  /** false: the cart total is outside this method's limits; show it disabled with `limit` */
+  within_limits: boolean | null
+  limit: string | null
 }
 
 export type DoitMethods = {
@@ -36,6 +39,8 @@ export type DoitPaymentStatus = {
   /** wait: keep polling · complete_cart: paid, place the order · view_order: done · retry: expired / failed */
   next_action: "wait" | "complete_cart" | "view_order" | "retry"
   poll_after_ms: number | null
+  /** the QRIS image (≈10 min) expired before the invoice: send the shopper to hosted_url */
+  qr_expired: boolean
   payment: {
     id: string | null
     status: "pending" | "paid" | "expired" | "failed" | "refunded" | null

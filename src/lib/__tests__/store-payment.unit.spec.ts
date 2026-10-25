@@ -1,5 +1,6 @@
 import {
   canAccessCart,
+  mergeFresh,
   pickDoitSession,
   StatusRefresher,
   toPublicPayment,
@@ -73,16 +74,17 @@ describe("toPublicPayment", () => {
 })
 
 describe("toStoreMethods", () => {
-  it("keeps QRIS and documented VA / transfer banks, drops cc and out-of-limit methods", () => {
+  it("keeps QRIS and documented VA / transfer banks, drops cc, marks out-of-limit methods", () => {
     const methods = toStoreMethods([
       { code: "qris", label: "QRIS", rail: "qris", bank: null, fee_payer: "merchant", fee_amount: 1050, total_amount: 150000, within_limits: true },
       { code: "va_bmri", label: "Mandiri VA", rail: "va", bank: "bmri", fee_payer: "customer", fee_amount: 4000, total_amount: 154000 },
       { code: "va_xxx", label: "Unknown VA", rail: "va", bank: "xxx" },
       { code: "cc", label: "Kartu kredit", rail: "cc", bank: null },
       { code: "tf_bca", label: "BCA", rail: "transfer", bank: "bca" },
-      { code: "qris_big", label: "QRIS", rail: "qris", within_limits: false },
+      { code: "qris_big", label: "QRIS", rail: "qris", within_limits: false, limit: "maks Rp10.000.000" },
     ])
-    expect(methods.map((m) => m.code)).toEqual(["qris", "va_bmri", "tf_bca"])
+    expect(methods.map((m) => m.code)).toEqual(["qris", "va_bmri", "tf_bca", "qris_big"])
+    expect(methods[3]).toMatchObject({ within_limits: false, limit: "maks Rp10.000.000" })
     expect(methods[1]).toMatchObject({ fee_amount: 4000, total_amount: 154000, fee_payer: "customer" })
     expect(methods[2].fee_amount).toBeNull()
   })
@@ -152,5 +154,21 @@ describe("RateLimiter", () => {
     for (let i = 0; i < 25; i++) {
       expect(l.hit(`k${i}`)).toBe(0)
     }
+  })
+})
+
+describe("mergeFresh", () => {
+  it("flags a released QR and keeps the stored rail", () => {
+    const stored = { id: "pay_1", status: "pending", rail: "qris", qr_content: "000201" }
+    const out = mergeFresh(stored, { id: "pay_1", status: "pending", rail: null, qr_content: null })
+    expect(out.qrExpired).toBe(true)
+    expect(out.data.rail).toBe("qris")
+    expect(out.data.qr_content).toBeNull()
+  })
+  it("no flag while the QR is live, for VA, or once paid", () => {
+    expect(mergeFresh({ rail: "qris" }, { status: "pending", rail: "qris", qr_content: "x" }).qrExpired).toBe(false)
+    expect(mergeFresh({ rail: "va" }, { status: "pending", rail: "va", qr_content: null }).qrExpired).toBe(false)
+    expect(mergeFresh({ rail: "qris" }, { status: "paid", rail: null, qr_content: null }).qrExpired).toBe(false)
+    expect(mergeFresh({ rail: "qris" }, null)).toEqual({ data: { rail: "qris" }, qrExpired: false })
   })
 })

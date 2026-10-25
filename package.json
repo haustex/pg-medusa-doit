@@ -1,7 +1,7 @@
 {
   "name": "medusa-payment-doit",
-  "version": "0.0.1",
-  "description": "doit.id payment gateway (QRIS, Virtual Account, bank transfer) for Medusa v2 \u2014 by Haus Kayu",
+  "version": "0.1.0",
+  "description": "doit.id payment gateway (QRIS, Virtual Account, bank transfer) for Medusa v2 — by Haus Kayu",
   "author": "Haus Kayu <dev@hauskayu.com> (https://hauskayu.com)",
   "license": "MIT",
   "homepage": "https://github.com/haustex/pg-medusa-doit#readme",
@@ -14,8 +14,14 @@
     "email": "dev@hauskayu.com"
   },
   "files": [
-    ".medusa/server"
+    ".medusa/server",
+    "CHANGELOG.md"
   ],
+  "publishConfig": {
+    "access": "public",
+    "tag": "beta",
+    "provenance": true
+  },
   "exports": {
     "./package.json": "./package.json",
     "./workflows": "./.medusa/server/src/workflows/index.js",

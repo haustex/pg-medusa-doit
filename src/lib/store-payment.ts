@@ -106,6 +106,28 @@ export function toPublicPayment(data: Record<string, unknown> | null | undefined
   return out
 }
 
+/**
+ * Lays a fresh doit.id read over the stored session data. A QRIS image lives
+ * about 10 minutes, shorter than the invoice: once it is released doit.id
+ * answers `pending` with `rail` and `qr_content` null. Then the stored rail is
+ * kept and `qrExpired` tells the storefront to send the shopper to hosted_url.
+ */
+export function mergeFresh(
+  stored: Record<string, unknown>,
+  fresh: Record<string, unknown> | null
+): { data: Record<string, unknown>; qrExpired: boolean } {
+  if (!fresh) {
+    return { data: stored, qrExpired: false }
+  }
+  const data: Record<string, unknown> = { ...stored, ...fresh }
+  const wasQris = stored.rail === "qris" || stored.requested_rail === "qris"
+  const qrExpired = wasQris && fresh.status === "pending" && !fresh.qr_content
+  if (fresh.rail === null || fresh.rail === undefined) {
+    data.rail = stored.rail ?? null
+  }
+  return { data, qrExpired }
+}
+
 /** Statuses that can still change by themselves (expired can turn paid: bayar_telat). */
 export function isOpenStatus(status: unknown): boolean {
   return status === "pending" || status === "expired"
@@ -245,12 +267,15 @@ export type StoreMethod = {
   fee_amount: number | null
   total_amount: number | null
   within_limits: boolean | null
+  /** doit.id's text for the amount limit when within_limits is false */
+  limit: string | null
 }
 
 /**
  * Keeps the methods this plugin can create a payment for: QRIS, VA banks in
- * VA_BANKS and transfer banks in TRANSFER_BANKS. Undocumented rails (cc) and
- * methods outside the amount limits are left out.
+ * VA_BANKS and transfer banks in TRANSFER_BANKS. Undocumented rails (cc) are
+ * left out; methods outside the amount limits stay in with within_limits
+ * false, so the storefront shows them disabled (as the docs ask) instead of hiding them.
  */
 export function toStoreMethods(data: Record<string, unknown>[] | undefined): StoreMethod[] {
   const out: StoreMethod[] = []
@@ -261,7 +286,7 @@ export function toStoreMethods(data: Record<string, unknown>[] | undefined): Sto
       rail === "qris" ||
       (rail === "va" && !!bank && (VA_BANKS as readonly string[]).includes(bank)) ||
       (rail === "transfer" && !!bank && (TRANSFER_BANKS as readonly string[]).includes(bank))
-    if (!ok || m.within_limits === false) {
+    if (!ok) {
       continue
     }
     const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null)
@@ -274,6 +299,7 @@ export function toStoreMethods(data: Record<string, unknown>[] | undefined): Sto
       fee_amount: num(m.fee_amount),
       total_amount: num(m.total_amount),
       within_limits: typeof m.within_limits === "boolean" ? m.within_limits : null,
+      limit: m.limit === null || m.limit === undefined ? null : String(m.limit),
     })
   }
   return out

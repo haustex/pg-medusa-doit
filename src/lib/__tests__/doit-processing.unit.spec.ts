@@ -26,6 +26,8 @@ jest.mock("@medusajs/medusa/core-flows", () => ({
 let sessionContext: any = null
 jest.mock("../session-state", () => ({
   loadSessionContext: jest.fn(async () => sessionContext),
+  // the real lookup needs Query; these tests use reference = session id
+  resolveSessionId: jest.fn(async (_c: unknown, p: { reference?: string }) => p.reference ?? null),
 }))
 
 // eslint-disable-next-line import/first

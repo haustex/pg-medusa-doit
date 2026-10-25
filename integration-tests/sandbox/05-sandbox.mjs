@@ -53,6 +53,13 @@ await runSuite(async () => {
   const codes = (methods.json.methods ?? []).map((m) => m.code)
   check("store methods (sandbox): qris + VA banks with fees, no cc", methods.json.source === "doit" && codes.includes("qris") && codes.some((c) => c.startsWith("va_")) && !codes.includes("cc") && methods.json.methods.every((m) => typeof m.fee_amount === "number"), codes.join(","))
 
+  // switching method and back reuses the open invoice (needs metadata in GET /v1/payments)
+  const sw = async (data) => (await api("POST", `/store/payment-collections/${q.pc.id}/payment-sessions`, { provider_id: "pp_doit_doit", data }, { store: true })).json.payment_collection?.payment_sessions?.[0]
+  const qVa = await sw({ rail: "va", va_bank: "bnia" })
+  const qBack = await sw({ rail: "qris" })
+  check("sandbox: QRIS → VA → QRIS reuses the first invoice", qBack?.data?.id === qd.id && qBack.data.reused_invoice === true && qVa?.data?.id !== qd.id, `${qBack?.data?.id} vs ${qd.id}`)
+  info(`list metadata: ${JSON.stringify((await doit("GET", "/v1/payments?status=pending&limit=5")).json?.data?.find((p) => p.id === qd.id)?.metadata)}`)
+
   // pending: complete must fail; a signed-but-false paid webhook must not create an order
   const early = await api("POST", `/store/carts/${v.cart.id}/complete`, {}, { store: true })
   check("complete cart while sandbox payment pending → no order", early.json?.type !== "order", `type ${early.json?.type}`)

@@ -96,3 +96,43 @@ export async function loadSessionContext(
     return null
   }
 }
+
+/**
+ * The Medusa session a doit.id payment belongs to. Normally its `reference`.
+ * An invoice reused by a later session of the same collection still carries
+ * the first session's id (Medusa hard-deletes replaced sessions), so when that
+ * session is gone the collection from the invoice metadata is searched for the
+ * session that now holds this payment id.
+ */
+export async function resolveSessionId(
+  container: MedusaContainer,
+  payment: { id: string; reference?: unknown; metadata?: Record<string, unknown> | null },
+  logger?: Logger
+): Promise<string | null> {
+  const byReference =
+    typeof payment.reference === "string" && payment.reference.startsWith("payses_") ? payment.reference : null
+  const collectionId = payment.metadata?.medusa_payment_collection_id
+  if (typeof collectionId !== "string" || !collectionId) {
+    return byReference
+  }
+  const query = container.resolve(ContainerRegistrationKeys.QUERY)
+  try {
+    if (byReference) {
+      const { data } = await query.graph({ entity: "payment_session", fields: ["id", "data"], filters: { id: byReference } })
+      const own = data[0] as { data?: Record<string, unknown> } | undefined
+      if (own && own.data?.id === payment.id) {
+        return byReference
+      }
+    }
+    const { data: sessions } = await query.graph({
+      entity: "payment_session",
+      fields: ["id", "data"],
+      filters: { payment_collection_id: collectionId },
+    })
+    const holder = (sessions as { id: string; data?: Record<string, unknown> }[]).find((s) => s.data?.id === payment.id)
+    return holder?.id ?? byReference
+  } catch (e) {
+    logger?.warn(`[doit] Could not resolve the session of ${payment.id}: ${(e as Error).message}`)
+    return byReference
+  }
+}

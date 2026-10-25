@@ -2,6 +2,7 @@ import type { MedusaResponse, MedusaStoreRequest } from "@medusajs/framework/htt
 import { MedusaError } from "@medusajs/framework/utils"
 import {
   isOpenStatus,
+  mergeFresh,
   pickDoitSession,
   POLL_AFTER_MS,
   readDoitPayment,
@@ -17,6 +18,7 @@ import { loadAccessibleCart } from "../../../helpers"
  *
  * next_action: wait (keep polling) · complete_cart (paid, call cart complete) ·
  * view_order (order exists) · retry (expired / failed: pick a method again).
+ * qr_expired: the QR image (≈10 min) ran out before the invoice; show hosted_url.
  */
 export async function GET(req: MedusaStoreRequest, res: MedusaResponse) {
   const { cart, orderId } = await loadAccessibleCart(req, req.params.id)
@@ -27,11 +29,12 @@ export async function GET(req: MedusaStoreRequest, res: MedusaResponse) {
 
   const stored = session.data ?? {}
   let data: Record<string, unknown> = stored
+  let qrExpired = false
   let checkedAt: number | null = null
   if (!orderId && isOpenStatus(stored.status) && typeof stored.id === "string" && stored.id.startsWith("pay_")) {
     const fresh = await readDoitPayment(req.scope, session.provider_id, stored.id)
     if (fresh) {
-      data = { ...stored, ...fresh.payment }
+      ;({ data, qrExpired } = mergeFresh(stored, fresh.payment))
       checkedAt = fresh.checkedAt
     }
   }
@@ -55,6 +58,8 @@ export async function GET(req: MedusaStoreRequest, res: MedusaResponse) {
     next_action: nextAction,
     poll_after_ms: nextAction === "wait" ? POLL_AFTER_MS : null,
     checked_at: checkedAt ? new Date(checkedAt).toISOString() : null,
+    // QRIS image released while the invoice is still open: continue on hosted_url
+    qr_expired: qrExpired,
     payment,
   })
 }

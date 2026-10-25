@@ -4,7 +4,8 @@ Drop-in files for [`nextjs-starter-medusa`](https://github.com/medusajs/nextjs-s
 (tested against commit `9818886`, Next.js 15, Medusa 2.19) that add a doit.id payment step:
 
 - **Pick a method**: QRIS or a Virtual Account bank. Only methods doit.id has active for your key are
-  listed, each with the fee for this cart (`GET /store/doit/methods`).
+  listed, each with the fee and the total to pay for this cart (`GET /store/doit/methods`). Methods outside their
+  amount limits are shown disabled. Who pays the fee is set per method in the doit.id portal, not by the plugin.
 - **QRIS**: renders `qr_content` as an SVG QR code ([`qrcode.react`](https://www.npmjs.com/package/qrcode.react), no canvas, no network).
 - **Virtual Account**: shows the number with a copy button.
 - **Countdown** to `expires_at`.
@@ -20,7 +21,7 @@ restyle or translate it in one place.
 
 | QRIS | Virtual Account |
 | --- | --- |
-| ![QRIS](screenshots/02b-qris-panel.png) | ![VA](screenshots/03b-va-panel.png) |
+| ![QRIS](../../docs/screenshots/storefront-qris.jpg) | ![VA](../../docs/screenshots/storefront-va.jpg) |
 
 ## Install
 
@@ -95,10 +96,13 @@ restyle or translate it in one place.
 | `view_order` | The webhook already completed the cart: `placeOrder()` returns that same order and redirects. |
 | `retry` | Expired or failed: offers "Buat tagihan baru" (new invoice with the same method). |
 
+When `qr_expired` is true (the QR image lives about 10 minutes, shorter than the invoice), the panel replaces the QR with
+a button to the hosted page, where doit.id issues a new QR.
+
 The status endpoint only answers for a cart that belongs to the publishable key's sales channel. If the
 cart belongs to a registered customer, that customer has to be logged in. Requests are rate limited
 (40/min per cart, 120/min per IP), and the backend reads doit.id at most once per 10 s per payment. A
-shopper who changes method gets a new invoice. The old one is not cancelled at doit.id (there is no
-cancel endpoint) and simply expires.
+shopper who changes method gets a new invoice; switching back to a method whose invoice is still open reuses it. An
+abandoned invoice is not cancelled at doit.id (there is no cancel endpoint) and simply expires.
 
 Community plugin, not an official doit.id product.

@@ -141,6 +141,15 @@ export default function DoitPaymentPanel({ cart, providerId, redirectToHosted = 
         {customerFee > 0 && <Text className="txt-small text-ui-fg-subtle">{t.includesFee(rupiah(customerFee))}</Text>}
       </div>
 
+      {!done && !retry && state.qr_expired && p?.hosted_url && (
+        <div className="flex flex-col items-start gap-y-3" data-testid="doit-qr-expired">
+          <Text className="txt-medium text-ui-fg-base max-w-sm">{t.qrExpired}</Text>
+          <Button asChild variant="primary">
+            <a href={p.hosted_url}>{t.continueHosted}</a>
+          </Button>
+        </div>
+      )}
+
       {!done && !retry && p?.qr_content && (
         <div className="flex flex-col items-start gap-y-3">
           <div className="rounded-rounded border border-ui-border-base bg-white p-3" data-testid="doit-qris">

@@ -6,6 +6,8 @@ import type DoitLedgerModuleService from "../modules/doitLedger/service"
 import type { DoitPayment, DoitWebhookEvent } from "../providers/doit/types"
 import { SIGNATURE_HEADER, verifySignature } from "../providers/doit/signature"
 import { decideWebhookAction } from "../providers/doit/webhook"
+import { DoitClient } from "../providers/doit/client"
+import { annotateDoitOrderWorkflow } from "../workflows/annotate-doit-order"
 import { recordDoitLedgerWorkflow } from "../workflows/record-doit-ledger"
 import { resolveDoitCredentials, type DoitProviderOptions } from "./credentials"
 import {
@@ -18,8 +20,9 @@ import {
   sessionIdOf,
   toLedgerPayment,
 } from "./ledger"
+import { toOrderNote } from "./order-note"
 import { getDoitProviderOptions } from "./provider-options"
-import { loadSessionContext } from "./session-state"
+import { loadSessionContext, resolveSessionId } from "./session-state"
 
 type Logger = { info: (m: string) => void; warn: (m: string) => void; error: (m: string) => void }
 
@@ -66,15 +69,16 @@ export async function settlePaidPayment(
   { options, eventId }: { options: DoitProviderOptions; eventId?: string }
 ): Promise<SettleResult> {
   const log = logger(container)
-  const sessionId = sessionIdOf(payment.reference)
-  const ledgerPayment = toLedgerPayment(payment)
+  const sessionId = await resolveSessionId(container, payment, log)
+  const ledgerPayment = toLedgerPayment(payment, { session_id: sessionId })
   if (!sessionId) {
     return { payment: ledgerPayment, attentions: [], captured: false }
   }
 
   const context = await loadSessionContext(container, sessionId, log)
   const decision = decideWebhookAction(
-    { id: eventId ?? "sync", type: "payment.paid", data: payment },
+    // A reused invoice references an earlier session of the same collection.
+    { id: eventId ?? "sync", type: "payment.paid", data: { ...payment, reference: sessionId } },
     context?.state ?? null,
     { latePaymentPolicy: options.late_payment_policy }
   )
@@ -321,4 +325,56 @@ export async function handleMedusaRefund(container: MedusaContainer, paymentId: 
   const { result } = await recordDoitLedgerWorkflow(container).run({ input: { refunds } })
   await checkRefundTotals(container, result.totals)
   logger(container).info(`[doit] Refunds of ${paymentId} recorded (${refunds.length}).`)
+}
+
+/**
+ * order.placed: writes the doit.id details (method, fee and who paid it) to
+ * `order.metadata.doit`, then reads the payment from doit.id and records it in
+ * the ledger with the order link. Orders completed by the storefront after
+ * polling never saw a webhook, so without this the ledger would wait for the
+ * sync job. A failed doit.id read is left to that job.
+ */
+export async function handleOrderPlaced(container: MedusaContainer, orderId: string): Promise<void> {
+  const query = container.resolve(ContainerRegistrationKeys.QUERY)
+  const { data } = await query.graph({
+    entity: "order",
+    fields: ["id", "payment_collections.payments.provider_id", "payment_collections.payments.data"],
+    filters: { id: orderId },
+  })
+  const payments = ((data[0] as Record<string, any> | undefined)?.payment_collections ?? []).flatMap(
+    (pc: { payments?: { provider_id?: string; data?: Record<string, unknown> }[] }) => pc.payments ?? []
+  )
+  const payment = payments.find((p: { provider_id?: string }) => p.provider_id?.startsWith("pp_doit_"))
+  const note = toOrderNote(payment?.data)
+  if (!payment || !note) {
+    return
+  }
+  const log = logger(container)
+  await annotateDoitOrderWorkflow(container).run({ input: { order_id: orderId, note } })
+
+  const config = container.resolve(ContainerRegistrationKeys.CONFIG_MODULE)
+  const options = getDoitProviderOptions(config as never, String(payment.provider_id).replace(/^pp_/, "")) ?? {}
+  const creds = await resolveDoitCredentials(container.resolve(ContainerRegistrationKeys.PG_CONNECTION), options, {
+    logger: log,
+  })
+  if (!creds.apiKey) {
+    return
+  }
+  let fresh: DoitPayment
+  try {
+    fresh = await new DoitClient({ apiKey: creds.apiKey, baseUrl: options.api_base_url }).getPayment(note.payment_id)
+  } catch (e) {
+    log.warn(`[doit] Order ${orderId}: could not read ${note.payment_id} (${(e as Error).message}); the sync job will record it.`)
+    return
+  }
+  const settled =
+    fresh.status === "paid"
+      ? await settlePaidPayment(container, fresh, { options })
+      : { payment: toLedgerPayment(fresh, { order_id: orderId }), attentions: [] }
+  await recordDoitLedgerWorkflow(container).run({
+    input: { payments: [{ ...settled.payment, order_id: orderId }], attentions: settled.attentions },
+  })
+  log.info(
+    `[doit] Order ${orderId}: ${note.payment_id} ${note.rail ?? ""} fee ${note.fee_amount ?? 0} (${note.fee_payer ?? "?"}) recorded.`
+  )
 }

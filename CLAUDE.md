@@ -191,6 +191,30 @@ Plugin open source (MIT) Medusa v2 (2.19.x) untuk payment gateway **doit.id** (P
   `constants.tsx`, `payment/index.tsx`, `payment-button/index.tsx`; QR lewat `qrcode.react` (SVG); teks di `labels.ts`.
   Tanpa promo/branding Haus Kayu di storefront.
 
+## Keputusan Fase 5 (fee, reuse invoice, rilis)
+
+- **Penanggung fee tidak bisa diatur lewat API**: `fee_payer` "diatur di portal" per metode (portal → Metode Pembayaran);
+  QRIS terkunci ke merchant (BI). Jadi tanpa setting di plugin. Sebagai gantinya: picker menampilkan biaya + total per
+  metode sebelum memilih; metode `within_limits: false` tetap tampil nonaktif dengan `limit` (sesuai docs);
+  subscriber `order.placed` → `annotateDoitOrderWorkflow` menulis `order.metadata.doit` (`toOrderNote`:
+  payment_id, rail, va_bank, amount, fee_amount, fee_payer, total_amount, customer_fee, merchant_fee, paid_at,
+  environment) lalu GET payment → `settlePaidPayment` → ledger dengan order_id (tanpa menunggu webhook/sync).
+- **QR berumur ±10 menit**, terpisah dari tagihan: setelah itu doit.id menjawab `pending` dengan `rail`/`qr_content`
+  null. `mergeFresh` mempertahankan rail tersimpan dan endpoint status mengirim `qr_expired: true` → panel mengarahkan
+  ke `hosted_url`.
+- **Reuse invoice**: Medusa membuat session baru dan menghapus (hard delete) session lama secara paralel, jadi memori
+  invoice lama ada di doit.id: invoice baru diberi `metadata.medusa_payment_collection_id` (dibaca provider dari tabel
+  `payment_session` miliknya sendiri). `initiatePayment` mencari di `GET /v1/payments?status=pending&limit=100`
+  invoice koleksi yang sama (`isReusableInvoice`: pending, amount + rail + bank sama, sisa ≥5 menit, QRIS: QR masih ada
+  dan umur <8 menit), dikonfirmasi GET; gagal → invoice baru. Session data `reused_invoice: true`. Invoice reuse
+  ber-`reference` session lama → `resolveSessionId` mencari session koleksi yang memegang payment id itu
+  (dipakai `settlePaidPayment`, jadi webhook dan sync tetap capture).
+- Rilis: versi 0.1.0, `publishConfig` `{ access: public, tag: beta, provenance: true }`, `files` = `.medusa/server` +
+  CHANGELOG. `release.yml` (tag `v*`): cek tag = versi, lint/typecheck/unit/E2E, lalu publish via npm trusted
+  publishing (OIDC, `id-token: write`, npm ≥11.5.1, environment `npm`), tanpa NPM_TOKEN. Screenshot README di
+  `docs/screenshots/` (JPEG kualitas 80 dari Playwright), di README pakai URL raw GitHub supaya tampil di npm.
+- **Jangan publish ke npm dan jangan ubah visibilitas repo** tanpa perintah user.
+
 ## Arsitektur
 
 ```
@@ -212,7 +236,7 @@ src/
   modules/doitLedger/        payment, event, refund, attention, sync_state, withdrawal; reports.ts (SQL dashboard)
   workflows/                 save-doit-settings, record-doit-ledger, claim-doit-event, save-doit-sync-state,
                              doit-admin (create/delete withdrawal, import settlement, resolve attention)
-  subscribers/               doit-settings-updated, doit-webhook-received, doit-payment-refunded
+  subscribers/               doit-settings-updated, doit-webhook-received, doit-payment-refunded, doit-order-placed
   jobs/sync-doit-payments.ts cron */15 * * * * (DOIT_SYNC_CRON)
   api/hooks/                 middleware verifikasi signature + claim event
   api/admin/doit/...         settings, test-connection, stats, payments(+export), withdrawals(+import, [id]), attention([id]/resolve)
@@ -310,4 +334,4 @@ Masih terbuka:
 
 ## Status
 
-- [x] Fase 0 · [x] Fase 1 · [x] Fase 2 · [x] Fase 3 · [x] Fase 4 · [ ] Fase 5
+- [x] Fase 0 · [x] Fase 1 · [x] Fase 2 · [x] Fase 3 · [x] Fase 4 · [x] Fase 5 (siap rilis; publish npm + repo publik menunggu langkah manual user)

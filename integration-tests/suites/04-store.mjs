@@ -3,7 +3,7 @@
 // Server :9300 + worker :9301, mock :9399. No webhooks are sent: polling alone must be enough.
 import {
   api, BASE, cartDone, check, fakeCredentials, login, logDir, mockLog, mockSet,
-  newCart, runSuite, setupStore, startStack, waitFor,
+  newCart, runSuite, setupStore, sql, startStack, waitFor,
 } from "../lib/harness.mjs"
 
 const { apiKey: API_KEY, secret: SECRET } = fakeCredentials()
@@ -96,7 +96,59 @@ await runSuite(async () => {
   check("methods without cart → list without amounts", (await api("GET", "/store/doit/methods", null, { store: true })).json.amount === null)
   check("methods with a non-doit provider → 400", (await api("GET", "/store/doit/methods?provider_id=pp_system_default", null, { store: true })).status === 400)
 
-  // --- rate limit: 40 / minute per cart
+  // --- switching method and back reuses the still-open invoice
+  const sw = await newCart(region.id, variantId, { data: { rail: "qris" } })
+  const firstQris = sw.session.data.id
+  const session = (data) => api("POST", `/store/payment-collections/${sw.pc.id}/payment-sessions`, { provider_id: "pp_doit_doit", data }, { store: true }).then((r) => r.json.payment_collection?.payment_sessions?.[0])
+  const toVa = await session({ rail: "va", va_bank: "bmri" })
+  check("switch to VA → new invoice", /^pay_/.test(toVa?.data?.id) && toVa.data.id !== firstQris && toVa.data.rail === "va")
+  const backQris = await session({ rail: "qris" })
+  check("back to QRIS while its invoice is open → same invoice reused", backQris?.data?.id === firstQris && backQris.data.reused_invoice === true && backQris.id !== sw.session.id, `${backQris?.data?.id} vs ${firstQris}`)
+  const backVa = await session({ rail: "va", va_bank: "bmri" })
+  check("back to VA Mandiri → its invoice reused", backVa?.data?.id === toVa.data.id)
+  const otherBank = await session({ rail: "va", va_bank: "bnia" })
+  check("another bank → new invoice", otherBank?.data?.id && ![firstQris, toVa.data.id].includes(otherBank.data.id))
+  const created = (await mockLog()).filter((l) => l.method === "POST" && l.path === "/v1/payments" && l.body?.metadata?.medusa_payment_collection_id === sw.pc.id)
+  check("doit.id invoices for this cart: 3 created for 5 sessions, all tagged with the collection", created.length === 3, String(created.length))
+  const reuseFinal = await session({ rail: "qris" })
+  check("final pick QRIS → first invoice again", reuseFinal?.data?.id === firstQris)
+
+  // pay the reused invoice: its reference is the first (deleted) session
+  await mockSet(firstQris, { status: "paid", paid_at: new Date().toISOString() })
+  const swPaid = await waitFor(async () => { const r = await status(sw.cart.id); return r.json.next_action === "complete_cart" ? r : null }, 20_000, 2000)
+  check("reused invoice paid → complete_cart", !!swPaid)
+  const swDone = await api("POST", `/store/carts/${sw.cart.id}/complete`, {}, { store: true })
+  check("cart with the reused invoice completes → order", swDone.json?.type === "order", swDone.text.slice(0, 160))
+  const swOrderId = swDone.json?.order?.id
+  const note = await waitFor(async () => (await api("GET", `/admin/orders/${swOrderId}?fields=metadata`)).json.order?.metadata?.doit, 20_000)
+  check("order.metadata.doit: invoice, rail, fee and who paid it", note?.payment_id === firstQris && note.rail === "qris" && note.fee_payer === "merchant" && note.fee_amount === 1050 && note.merchant_fee === 1050 && note.customer_fee === 0 && note.total_amount === 150000, JSON.stringify(note))
+  const ledger = await waitFor(async () => (await sql("select order_id, session_id, fee_amount, fee_payer, net_amount, reconciled_at from doit_payment where doit_id = $1 and order_id is not null", [firstQris]))[0], 20_000)
+  check("ledger row right after the order (no webhook): order, current session, fee, net", ledger?.order_id === swOrderId && ledger.session_id === reuseFinal.id && ledger.fee_amount === 1050 && ledger.net_amount === 148950 && !!ledger.reconciled_at, JSON.stringify(ledger))
+
+  // VA order: the shopper paid the fee on top
+  const vaPaid = sv.json.payment
+  await mockSet(vaPaid.id, { status: "paid", paid_at: new Date().toISOString() })
+  await waitFor(async () => (await status(v.cart.id)).json.next_action === "complete_cart", 20_000, 2000)
+  const vaOrder = await api("POST", `/store/carts/${v.cart.id}/complete`, {}, { store: true })
+  const vaNote = await waitFor(async () => (await api("GET", `/admin/orders/${vaOrder.json?.order?.id}?fields=metadata`)).json.order?.metadata?.doit, 20_000)
+  check("VA order note: customer paid 4000 on top, total 154000, captured amount 150000", vaNote?.customer_fee === 4000 && vaNote.total_amount === 154000 && vaNote.amount === 150000, JSON.stringify(vaNote))
+
+  // --- the QR image expires before the invoice
+  const qx = await newCart(region.id, variantId)
+  await mockSet(qx.session.data.id, { rail: null, qr_content: null })
+  const sq = await status(qx.cart.id)
+  check("QR released (rail/qr null, still pending) → qr_expired, rail kept, hosted_url", sq.json.qr_expired === true && sq.json.next_action === "wait" && sq.json.payment.rail === "qris" && !!sq.json.payment.hosted_url, JSON.stringify({ e: sq.json.qr_expired, r: sq.json.payment?.rail }))
+  check("QR live → qr_expired false", s1.json.qr_expired === false)
+
+  // --- methods outside the amount limits are listed, disabled
+  // (mock QRIS max is 10 000 000; a 12 000 000 cart)
+  const big = (await api("POST", "/store/carts", { region_id: region.id, items: [{ variant_id: variantId, quantity: 80 }] }, { store: true })).json.cart
+  const bm = await api("GET", `/store/doit/methods?cart_id=${big.id}`, null, { store: true })
+  const bq = bm.json.methods?.find((m) => m.code === "qris")
+  check("methods: QRIS over its limit stays listed with within_limits false", bq?.within_limits === false && bm.json.methods.some((m) => m.code === "va_bmri" && m.within_limits === true), JSON.stringify(bq))
+
+  // --- rate limit: 40 / minute per cart (start from a fresh per-IP minute window)
+  await new Promise((r) => setTimeout(r, 61_000))
   const r = await newCart(region.id, variantId)
   const codesSeen = []
   let retryAfter = null

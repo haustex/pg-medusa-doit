@@ -10,6 +10,9 @@ export const doitLabels = {
   anyMethod: "Pilih di halaman pembayaran",
   feeByCustomer: (fee: string) => `+ biaya ${fee}`,
   noFee: "Tanpa biaya tambahan",
+  totalWithFee: (total: string) => `Total ${total}`,
+  outsideLimit: (limit: string | null) => (limit ? `Tidak tersedia: ${limit}` : "Tidak tersedia untuk nominal ini"),
+  feeNote: "Biaya layanan ditetapkan doit.id per metode. Total yang dibayar tampil sebelum kamu memilih.",
   methodsUnavailable: "Daftar metode tidak bisa dimuat. Metode bawaan toko akan dipakai.",
   loading: "Memuat…",
   payButton: "Bayar",
@@ -25,6 +28,8 @@ export const doitLabels = {
   expiresIn: "Sisa waktu",
   expired: "Waktu pembayaran habis",
   openHosted: "Buka halaman pembayaran",
+  qrExpired: "Kode QR sudah tidak berlaku. Lanjutkan pembayaran di halaman doit.id untuk membuat kode baru.",
+  continueHosted: "Lanjutkan di halaman pembayaran",
 
   waiting: "Menunggu pembayaran… halaman ini diperbarui otomatis.",
   paid: "Pembayaran diterima. Membuat pesanan…",

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: mailto:dev@hauskayu.com
+    about: Report security problems privately (see SECURITY.md).
+  - name: doit.id account, fees or settlement
+    url: mailto:care@doit.id
+    about: Questions about your doit.id account go to doit.id directly.

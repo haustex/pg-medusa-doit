@@ -107,6 +107,39 @@ export function toMedusaError(e: unknown, action: string): Error {
   )
 }
 
+/** A reused VA / transfer invoice must still be payable for at least this long. */
+export const REUSE_MIN_REMAINING_MS = 5 * 60_000
+/** A reused QRIS invoice must be younger than this: its QR image lives ≈10 minutes. */
+export const REUSE_QRIS_MAX_AGE_MS = 8 * 60_000
+
+/**
+ * Whether an existing doit.id invoice can serve a new session of the same
+ * payment collection: still pending, same amount, same rail and bank, and
+ * payable long enough (QRIS: QR still issued and recent).
+ */
+export function isReusableInvoice(
+  p: DoitPayment,
+  want: { collectionId: string; amount: number; rail: string; va_bank?: string | null },
+  now = Date.now()
+): boolean {
+  const meta = (p.metadata ?? {}) as Record<string, unknown>
+  if (p.status !== "pending" || meta.medusa_payment_collection_id !== want.collectionId) {
+    return false
+  }
+  if (p.amount !== want.amount || p.rail !== want.rail) {
+    return false
+  }
+  const expires = p.expires_at ? Date.parse(p.expires_at) : NaN
+  if (!Number.isFinite(expires) || expires - now < REUSE_MIN_REMAINING_MS) {
+    return false
+  }
+  if (want.rail === "qris") {
+    const created = p.created_at ? Date.parse(p.created_at) : NaN
+    return !!p.qr_content && Number.isFinite(created) && now - created < REUSE_QRIS_MAX_AGE_MS
+  }
+  return (p.va_bank ?? null) === (want.va_bank ?? null)
+}
+
 function shortHash(value: unknown): string {
   return crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex").slice(0, 16)
 }
@@ -204,6 +237,50 @@ class DoitPaymentProviderService extends AbstractPaymentProvider<DoitProviderOpt
     return { client, creds }
   }
 
+  /** The session's payment collection, read from the payment module's own table. */
+  protected async collectionIdOf(sessionId: string): Promise<string | null> {
+    if (!this.pg_) {
+      return null
+    }
+    try {
+      const row = await this.pg_("payment_session").select("payment_collection_id").where({ id: sessionId }).first()
+      return (row?.payment_collection_id as string | undefined) ?? null
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Medusa replaces (and hard-deletes) a collection's session whenever the
+   * shopper changes method, so the earlier invoice is only known to doit.id.
+   * Looks among the newest pending invoices for one of this collection that
+   * still fits, and confirms it with a fresh read. Any failure → null (a new
+   * invoice is created).
+   */
+  protected async findReusableInvoice(
+    client: DoitClient,
+    want: { collectionId: string; amount: number; rail: string; va_bank?: string | null }
+  ): Promise<DoitPayment | null> {
+    if (want.rail === "any") {
+      return null
+    }
+    try {
+      const { data } = await client.listPayments({ status: "pending", limit: 100 })
+      const candidates = (data ?? [])
+        .filter((p) => isReusableInvoice(p, want))
+        .sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")))
+      for (const candidate of candidates.slice(0, 2)) {
+        const fresh = await client.getPayment(candidate.id)
+        if (isReusableInvoice(fresh, want)) {
+          return fresh
+        }
+      }
+    } catch (e) {
+      this.logger_.warn(`[doit] Invoice reuse lookup failed, creating a new one: ${(e as Error).message}`)
+    }
+    return null
+  }
+
   protected doitId(data: Record<string, unknown> | undefined): string {
     const id = data?.id
     if (typeof id !== "string" || !id.startsWith("pay_")) {
@@ -222,7 +299,8 @@ class DoitPaymentProviderService extends AbstractPaymentProvider<DoitProviderOpt
    */
   protected async createDoitPayment(
     input: InitiatePaymentInput | UpdatePaymentInput,
-    previous: DoitSessionData = {}
+    previous: DoitSessionData = {},
+    { allowReuse = false }: { allowReuse?: boolean } = {}
   ): Promise<{ payment: DoitPayment; data: DoitSessionData }> {
     assertIdr(input.currency_code)
     const amount = toRupiah(input.amount)
@@ -242,6 +320,7 @@ class DoitPaymentProviderService extends AbstractPaymentProvider<DoitProviderOpt
       requestedRail ? (input.data?.va_bank as string | undefined) : creds.vaBank
     )
 
+    const collectionId = await this.collectionIdOf(sessionId)
     const body: CreatePaymentBody = {
       amount,
       reference: sessionId,
@@ -250,21 +329,35 @@ class DoitPaymentProviderService extends AbstractPaymentProvider<DoitProviderOpt
       expires_in: creds.expiresIn,
       ...(sanitizeReturnUrl(input.data?.return_url) ? { return_url: sanitizeReturnUrl(input.data?.return_url) } : {}),
       ...(customerOf(input.context) ? { customer: customerOf(input.context) } : {}),
-      metadata: { medusa_payment_session_id: sessionId },
+      metadata: {
+        medusa_payment_session_id: sessionId,
+        ...(collectionId ? { medusa_payment_collection_id: collectionId } : {}),
+      },
     }
     const idempotencyKey = `${sessionId}-${shortHash(body)}`
 
+    const reused =
+      allowReuse && collectionId
+        ? await this.findReusableInvoice(client, { collectionId, amount, rail, va_bank })
+        : null
     let payment: DoitPayment
-    try {
-      payment = await client.createPayment(body, idempotencyKey)
-    } catch (e) {
-      throw toMedusaError(e, "membuat pembayaran")
+    if (reused) {
+      payment = reused
+      this.logger_.info(`[doit] Session ${sessionId} reuses invoice ${reused.id} (${rail}${va_bank ? ` ${va_bank}` : ""}).`)
+    } else {
+      try {
+        payment = await client.createPayment(body, idempotencyKey)
+      } catch (e) {
+        throw toMedusaError(e, "membuat pembayaran")
+      }
     }
 
     const data = toSessionData(payment, {
       ...previous,
       session_id: sessionId,
       idempotency_key: idempotencyKey,
+      ...(collectionId ? { payment_collection_id: collectionId } : {}),
+      ...(reused ? { reused_invoice: true } : {}),
     })
     if (requestedRail) {
       data.requested_rail = requestedRail
@@ -273,7 +366,7 @@ class DoitPaymentProviderService extends AbstractPaymentProvider<DoitProviderOpt
   }
 
   async initiatePayment(input: InitiatePaymentInput): Promise<InitiatePaymentOutput> {
-    const { payment, data } = await this.createDoitPayment(input)
+    const { payment, data } = await this.createDoitPayment(input, {}, { allowReuse: true })
     return { id: payment.id, status: toSessionStatus(payment.status), data }
   }
 

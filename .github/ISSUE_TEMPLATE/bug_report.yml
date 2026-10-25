@@ -1,0 +1,53 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not post API keys, signing secrets or customer data. Security problems: email dev@hauskayu.com (see SECURITY.md).
+        Jangan cantumkan API key, secret, atau data pelanggan.
+  - type: input
+    id: version
+    attributes:
+      label: Plugin version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: medusa
+    attributes:
+      label: Medusa version and Node version
+      placeholder: Medusa 2.19.0, Node 22
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: doit.id mode
+      options: [sandbox (pb_test_), live (pb_live_)]
+    validations:
+      required: true
+  - type: dropdown
+    id: rail
+    attributes:
+      label: Payment method
+      options: [QRIS, Virtual Account, any (hosted page), transfer, not payment related]
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Lines starting with [doit] from the server and worker, with secrets removed.
+      render: text

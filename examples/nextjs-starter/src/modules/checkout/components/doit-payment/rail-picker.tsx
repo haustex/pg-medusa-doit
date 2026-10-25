@@ -38,7 +38,9 @@ export default function DoitRailPicker({ cartId, value, onChange }: Props) {
       setMethods(res.data.methods)
       if (!value) {
         const preferred =
-          res.data.methods.find((m) => keyOf(m) === keyOf(res.data.default)) ?? res.data.methods[0]
+          res.data.methods.find((m) => m.within_limits !== false && keyOf(m) === keyOf(res.data.default)) ??
+          res.data.methods.find((m) => m.within_limits !== false) ??
+          res.data.methods[0]
         onChange({ rail: preferred.rail, va_bank: preferred.bank })
       }
     })
@@ -73,14 +75,15 @@ export default function DoitRailPicker({ cartId, value, onChange }: Props) {
           <div className="grid grid-cols-1 small:grid-cols-2 gap-2">
             {group.items.map((m) => {
               const selected = value ? keyOf(value) === keyOf(m) : false
-              const fee =
-                m.fee_payer === "customer" && m.fee_amount ? t.feeByCustomer(rupiah(m.fee_amount)) : t.noFee
+              const disabled = m.within_limits === false
+              const customerFee = m.fee_payer === "customer" && m.fee_amount ? m.fee_amount : 0
+              const fee = disabled ? t.outsideLimit(m.limit) : customerFee ? t.feeByCustomer(rupiah(customerFee)) : t.noFee
               return (
                 <label
                   key={m.code}
                   className={clx(
-                    "flex items-center justify-between gap-x-3 rounded-rounded border px-4 py-3 cursor-pointer",
-                    "hover:shadow-borders-interactive-with-active",
+                    "flex items-center justify-between gap-x-3 rounded-rounded border px-4 py-3",
+                    disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:shadow-borders-interactive-with-active",
                     selected ? "border-ui-border-interactive" : "border-ui-border-base"
                   )}
                   data-testid={`doit-method-${m.code}`}
@@ -91,6 +94,7 @@ export default function DoitRailPicker({ cartId, value, onChange }: Props) {
                       name="doit-method"
                       className="accent-ui-fg-interactive"
                       checked={selected}
+                      disabled={disabled}
                       onChange={() => onChange({ rail: m.rail, va_bank: m.bank })}
                     />
                     <span className="flex flex-col">
@@ -100,13 +104,19 @@ export default function DoitRailPicker({ cartId, value, onChange }: Props) {
                       {m.rail === "qris" && <span className="txt-small text-ui-fg-subtle">{t.qrisHint}</span>}
                     </span>
                   </span>
-                  <span className="txt-small text-ui-fg-subtle whitespace-nowrap">{fee}</span>
+                  <span className="flex flex-col items-end txt-small text-ui-fg-subtle whitespace-nowrap">
+                    <span>{fee}</span>
+                    {!disabled && customerFee > 0 && m.total_amount !== null && (
+                      <span className="text-ui-fg-base">{t.totalWithFee(rupiah(m.total_amount))}</span>
+                    )}
+                  </span>
                 </label>
               )
             })}
           </div>
         </fieldset>
       ))}
+      <Text className="txt-small text-ui-fg-muted">{t.feeNote}</Text>
     </div>
   )
 }
