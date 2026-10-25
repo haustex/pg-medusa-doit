@@ -39,6 +39,8 @@ export type EncryptionStatus =
 export const ENCRYPTION_KEY_INVALID_MESSAGE =
   "Kunci enkripsi tidak valid, masukkan ulang kredensial."
 
+export type LatePaymentPolicy = "accept" | "flag"
+
 export type DoitProviderOptions = {
   api_key?: string
   webhook_secret?: string
@@ -46,6 +48,20 @@ export type DoitProviderOptions = {
   va_bank?: string
   expires_in?: number
   credentials_cache_ttl_ms?: number
+  /** Override for tests; defaults to https://pay.doit.id */
+  api_base_url?: string
+  /** Per-request timeout. Default 15000. */
+  request_timeout_ms?: number
+  /** Retries for 429 / 5xx / network errors, with the same Idempotency-Key. Default 2. */
+  max_retries?: number
+  /** Longest Retry-After we are willing to wait inside one call. Default 15000. */
+  max_retry_wait_ms?: number
+  /**
+   * What to do with a payment paid after it expired (`bayar_telat`) whose
+   * session is still open: "accept" captures it (default), "flag" leaves the
+   * Medusa payment untouched and only logs that it needs a decision.
+   */
+  late_payment_policy?: LatePaymentPolicy
 }
 
 export type DoitCredentials = {

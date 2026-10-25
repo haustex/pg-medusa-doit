@@ -78,9 +78,32 @@ Plugin open source (MIT) Medusa v2 (2.19.x) untuk payment gateway **doit.id** (P
 - Urutan sumber: Admin → options provider → env (`DOIT_API_KEY`, `DOIT_WEBHOOK_SECRET`). Secret selalu diambil dari sumber
   yang sama dengan API key.
 - API tidak pernah mengembalikan secret: hanya `{ is_set, masked }` (4 karakter terakhir) lewat `toPublicSettings`.
-- Webhook Medusa: route `/hooks/payment/doit_doit` **selalu menjawab 200** lalu memproses di subscriber (worker) setelah
-  `webhook_delay`. Verifikasi signature terjadi di worker; signature salah di-log + diabaikan, doit.id tidak melihat 401.
-  Pertimbangkan middleware verifikasi di route itu pada Fase 1 agar signature salah dijawab 401.
+- Webhook Medusa: route core `/hooks/payment/doit_doit` menjawab 200 lalu memproses di subscriber (worker) setelah
+  `webhook_delay`. Sejak Fase 1 ada middleware di depannya (lihat "Keputusan Fase 1").
+
+## Keputusan Fase 1 (provider + webhook)
+
+- Middleware `src/api/hooks/verify-doit-signature.ts`, matcher `/hooks/payment/:provider` + `bodyParser.preserveRawBody`,
+  hanya bertindak untuk param `doit_<id>` (opsi provider dicari di `configModule.modules.payment.options.providers`).
+  401 `invalid_signature` (mismatch / header hilang/rusak / body hilang / `t` lewat ±300 dtk) atau
+  `webhook_secret_not_configured`. Event id yang sudah diterima (respons 2xx) dijawab 200 `duplicate` tanpa di-queue lagi
+  (cache in-memory per proses, 24 jam; diganti ledger di Fase 2). Worker memverifikasi HMAC ulang **tanpa** cek `t`.
+- Webhook tidak pernah dipercaya sendirian: aksi `captured` → Medusa memanggil `authorizePayment` → GET ke doit.id. Payload
+  palsu-bertanda-tangan untuk payment yang masih pending tidak membuat order (teruji di sandbox).
+- `reference` = payment session id (`payses_…`); event dengan reference lain diabaikan. Capture memakai `amount`
+  (nominal tagihan), bukan `total_amount` (bisa termasuk fee yang dibayar pembeli).
+- Provider membaca tabel Payment Module `payment_session` / `payment` (read-only, lewat `__pg_connection__`) untuk
+  memutuskan webhook paid: sudah captured → no-op; `bayar_ganda` → capture sekali + log `PERLU TINDAKAN overpaid`;
+  payment Medusa canceled → tidak capture, log `late_payment_canceled`; session hilang / invoice lama / nominal beda →
+  log. `late_payment_policy` (`accept` default | `flag`). Log `[doit] PERLU TINDAKAN <code>` dipindah ke ledger di Fase 2.
+- Status: pending→pending, paid/refunded→captured, expired→canceled, failed→error. Cart complete saat pending gagal
+  (order baru dibuat oleh webhook / authorize setelah paid).
+- `updatePayment` dengan nominal sama tidak memanggil API; nominal berubah → tagihan baru, id lama di `superseded_ids`.
+- Storefront boleh mengirim `data.rail` + `data.va_bank` (divalidasi) dan `data.return_url` (http(s) ≤512) saat membuat
+  session; default dari setting Admin.
+- Client: token bucket 120/menit per key per proses; retry 429/5xx/timeout dengan Idempotency-Key sama, hormati
+  `Retry-After` (maks `max_retry_wait_ms` 15 dtk, `max_retries` 2); `provider_refund_failed` tidak di-retry.
+- Refund: Idempotency-Key = id refund Medusa; provider menolak refund melebihi sisa sendiri (sandbox tidak menolaknya).
 
 ## Arsitektur
 
@@ -162,16 +185,25 @@ server+worker terpisah, dan kunci enkripsi hilang/rusak/salah. Lihat "Keputusan 
 Terjawab oleh https://doit.id/docs/ (HTML): definisi `bayar_ganda`/`bayar_telat` dan bahwa keduanya ada di array `flags`;
 rate limit 120/menit + `Retry-After`; Idempotency-Key wajib di semua POST; body refund `{ amount?, reason? }` + kode error.
 
-Masih terbuka (verifikasi di sandbox `pb_test_`):
+Hasil sandbox `pb_test_` (2026-10-25, Fase 1):
+- `environment` pada payment/methods bernilai `"test"` (bukan `sandbox`). Payment lama memuat `customer.email`.
+- Respons refund: `{ id: rf_…, payment_id, amount, status: "succeeded", reason }` (langsung `succeeded`).
+- Status tetap `paid` setelah refund parsial **dan** setelah refund melebihi nominal; tidak berubah ke `refunded`.
+- **Sandbox menerima refund melebihi sisa** (201, bukan 400 `invalid_refund_amount` seperti di docs).
+- Rail `transfer` ditolak sandbox: 400 `invalid_request` "rail wajib 'qris', 'va', 'cc', atau 'any'" (ada rail `cc`
+  yang tidak didokumentasikan).
+- Replay Idempotency-Key dengan body berbeda → 200 dengan payment asli.
+
+Masih terbuka:
 - `bayar_ganda`: field mana yang memuat jumlah kelebihan bayar / instrumen kedua? `amount` tetap nominal tagihan?
   Webhook mana yang dikirim untuk pembayaran kedua (`payment.paid` lagi dengan id event baru?).
 - Refund untuk `bayar_ganda`: bisakah `amount` melebihi nominal tagihan untuk mengembalikan kelebihan bayar?
-- Bentuk payload `refund.succeeded|refund.failed` (objek refund atau payment? ada id refund?).
-- Status setelah refund parsial (tetap `paid` atau `refunded`?).
+- Bentuk payload webhook `refund.succeeded|refund.failed` (objek refund atau payment?).
+- Kapan status menjadi `refunded` di live (sandbox tidak pernah).
 - `before` di `GET /v1/payments` membandingkan `created_at`? Urutan selalu terbaru dulu?
 - Toleransi timestamp signature dan apakah `v1` bisa berisi lebih dari satu signature saat rotasi secret.
 - Rail `transfer` butuh live key untuk mutasi; di sandbox mungkin terbatas.
 
 ## Status
 
-- [x] Fase 0 · [ ] Fase 1 · [ ] Fase 2 · [ ] Fase 3 · [ ] Fase 4 · [ ] Fase 5
+- [x] Fase 0 · [x] Fase 1 · [ ] Fase 2 · [ ] Fase 3 · [ ] Fase 4 · [ ] Fase 5

@@ -1,7 +1,7 @@
 import { z } from "@medusajs/framework/zod"
+import { TRANSFER_BANKS, VA_BANKS } from "../../../../lib/banks"
 
-export const VA_BANKS = ["bmri", "bnia", "brin", "cimb", "permata", "maybank", "danamon", "bsyi"] as const
-export const TRANSFER_BANKS = ["bca", "mandiri", "bni", "bsi"] as const
+export { TRANSFER_BANKS, VA_BANKS }
 
 export const PostAdminDoitSettings = z
   .object({

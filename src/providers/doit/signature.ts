@@ -8,8 +8,35 @@ export type SignatureVerification =
   | { valid: true; timestamp: number }
   | {
       valid: false
-      reason: "missing_header" | "malformed_header" | "timestamp_out_of_range" | "mismatch"
+      reason:
+        | "missing_header"
+        | "malformed_header"
+        | "missing_body"
+        | "timestamp_out_of_range"
+        | "mismatch"
     }
+
+/**
+ * The exact bytes received. Medusa passes a Buffer; after a trip through the
+ * Redis event bus it can arrive as `{ type: "Buffer", data: [...] }`.
+ */
+export function toRawBody(raw: unknown): Buffer | null {
+  if (Buffer.isBuffer(raw)) {
+    return raw
+  }
+  if (typeof raw === "string") {
+    return Buffer.from(raw, "utf8")
+  }
+  if (
+    raw &&
+    typeof raw === "object" &&
+    (raw as { type?: unknown }).type === "Buffer" &&
+    Array.isArray((raw as { data?: unknown }).data)
+  ) {
+    return Buffer.from((raw as { data: number[] }).data)
+  }
+  return null
+}
 
 export function parseSignatureHeader(
   header: string
@@ -59,7 +86,7 @@ export function verifySignature({
   toleranceSeconds = DEFAULT_SIGNATURE_TOLERANCE_SECONDS,
   now = Date.now(),
 }: {
-  rawBody: string | Buffer
+  rawBody: unknown
   header: string | string[] | undefined
   secret: string
   toleranceSeconds?: number
@@ -74,12 +101,17 @@ export function verifySignature({
     return { valid: false, reason: "malformed_header" }
   }
 
+  const body = toRawBody(rawBody)
+  if (!body) {
+    return { valid: false, reason: "missing_body" }
+  }
+
   const timestamp = Number(parsed.t)
   if (toleranceSeconds > 0 && Math.abs(now / 1000 - timestamp) > toleranceSeconds) {
     return { valid: false, reason: "timestamp_out_of_range" }
   }
 
-  const expected = Buffer.from(computeSignature(secret, parsed.t, rawBody), "hex")
+  const expected = Buffer.from(computeSignature(secret, parsed.t, body), "hex")
   const matches = parsed.v1.some((candidate) => {
     if (!/^[0-9a-fA-F]+$/.test(candidate)) {
       return false
