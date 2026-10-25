@@ -1,0 +1,159 @@
+# medusa-payment-doit
+
+Plugin open source (MIT) Medusa v2 (2.19.x) untuk payment gateway **doit.id** (PayBridge API).
+**Bukan produk resmi doit.id.** Sumber API: https://doit.id/docs/ (HTML, lebih lengkap) dan https://doit.id/docs/llms.txt
+(keduanya dibaca 2026-10-25). Kalau keduanya berbeda, ikuti halaman HTML.
+
+## Aturan kerja
+
+- Kerjakan **per fase**. Setelah satu fase selesai (build + lint + tes hijau), berhenti dan tunggu "go" dari user.
+- **Jangan pernah commit API key / signing secret / kunci enkripsi.** Kredensial hanya lewat Admin (terenkripsi) atau env.
+  `.env*` di-gitignore; tes integrasi membaca `DOIT_TEST_API_KEY` (`pb_test_…`) dari env, tidak di-hardcode.
+- Ikuti skill `medusa-dev:building-with-medusa` (Module → Workflow → API route; mutasi lewat workflow; hanya GET/POST/DELETE;
+  Zod dari `@medusajs/framework/zod` (v4); nama modul camelCase) dan `building-admin-dashboard-customizations` untuk UI.
+- Validasi: `npm run build` dan `npx medusa lint` setelah setiap perubahan berarti.
+- Medusa menyimpan harga apa adanya (Rp150.000 = `150000`). Jangan dikali/dibagi 100.
+
+## Fakta API doit.id (ringkas)
+
+- Base URL `https://pay.doit.id`, `Authorization: Bearer <key>`. Mode ditentukan **prefix key**: `pb_test_` / `pb_live_`.
+- **Setiap POST wajib `Idempotency-Key`** (tanpa itu: 400 `missing_idempotency_key`); replay → HTTP 200 dengan hasil asli.
+  Timeout / 500 / 503 → ulangi dengan key yang **sama** (aman).
+- **Rate limit 120 request/menit per API key.** Lewat → 429 `rate_limited` + header `Retry-After` (detik); 503
+  `service_unavailable` juga membawa `Retry-After` dan **bukan** kegagalan permanen. Hormati nilainya, ulangi request yang sama.
+- Amount = integer rupiah. Error: `{ error: { code, message, doc_url } }`.
+- `GET /v1/methods[?amount=]` → metode yang benar-benar aktif untuk key ini (+ `fee_amount`/`total_amount` bila ada amount).
+  Kandidat endpoint untuk tombol **Test koneksi** dan validasi rail di Admin.
+- `POST /v1/payments` — `amount`, `reference` (1–128), `rail` (`qris|va|transfer|any`), `va_bank`
+  (va: `bmri bnia brin cimb permata maybank danamon bsyi`; transfer: `bca mandiri bni bsi`), `expires_in` (≥60, default 86400),
+  `return_url`, `customer`, `metadata`. Response: `id pay_…`, `status pending|paid|expired|failed|refunded`, `qr_content`,
+  `va_number`, `fee_amount`, `fee_payer`, `total_amount`, `hosted_url`, `expires_at`, `paid_at`, `environment`, …
+- `GET /v1/payments/{id}`, `GET /v1/payments?status=&reference=&limit<=100&before=<ISO>` → `{ data: [...] }`.
+- `POST /v1/payments/{id}/refunds` (Idempotency-Key), body `{ amount?, reason? }`: `amount` opsional (default penuh);
+  refund parsial boleh berulang sampai total = nominal asal. Hanya status `paid`. Error: 409 `payment_not_refundable`,
+  400 `invalid_refund_amount` (melebihi sisa), 502 `provider_refund_failed` (message = alasan penyedia).
+  Event `refund.succeeded|refund.failed`.
+- Siklus status (hanya 5): `pending → paid → refunded`, `pending → expired → paid` (bayar telat), `pending → failed`.
+- Webhook: `{ id: evt_…, type, created_at, data: payment }`. Header `PayBridge-Signature: t=<unix>,v1=<hex>`,
+  `v1 = HMAC_SHA256(secret, t + "." + rawBody)`. At-least-once → dedupe `id`; percaya `status`, bukan urutan.
+  Event: `payment.paid` (bisa datang setelah `payment.expired` → flag `bayar_telat`), `payment.expired`, `invoice.created`,
+  `payment.proof_uploaded`, `refund.*`, `webhook.test` (balas 2xx).
+- Signature: tidak ada toleransi timestamp yang didokumentasikan; contoh resmi tidak mengecek `t`. Kita pakai ±300 detik.
+- Array `flags` pada objek payment ("kasus tak lazim dari penyedia"; integrasi sederhana boleh mengabaikannya). Nilai saat ini:
+  - `bayar_telat`: dibayar setelah `expired`; `payment.paid` bisa datang **setelah** `payment.expired`. Kalau order sudah
+    dibatalkan, merchant memutuskan: penuhi atau refund.
+  - `bayar_ganda`: tagihan yang **sama** dibayar lewat **dua instrumen berbeda** (mis. pelanggan ganti metode, keduanya
+    terbayar). Dana tetap tercatat dan direkap. Jadi ini satu payment id dengan kelebihan bayar, bukan dua payment.
+  - `lunas_manual`: rail transfer yang dikonfirmasi manual via `POST /v1/payments/{id}/confirm`.
+
+## Keputusan Fase 0 (kredensial)
+
+- **Sumber kebenaran: tabel `doit_setting` (modul `doitSettings`).** Provider membacanya langsung lewat
+  `__pg_connection__` (knex bersama yang diteruskan Medusa ke container setiap modul, termasuk Payment Module) dan
+  mendekripsi sendiri (`src/lib/credentials.ts`). Server dan worker selalu membaca DB yang sama.
+- Cache in-memory per proses hanya pelengkap: TTL 60 detik (`credentials_cache_ttl_ms`), dibersihkan langsung di proses
+  yang menyimpan, dan di proses lain lewat event `doit.settings.updated` (subscriber). Dengan event-bus-redis event diterima
+  satu worker saja; worker lain (kalau ada >1) paling lambat basi 60 detik.
+- Enkripsi: AES-256-GCM, kunci `DOIT_ENCRYPTION_KEY` (64 hex, `openssl rand -hex 32`), AAD = nama kolom, fingerprint
+  kunci (HMAC) disimpan untuk mendeteksi kunci salah tanpa mencoba dekripsi.
+- Kunci hilang/rusak/salah: tidak crash. `GET /admin/doit/settings` → `encryption.status` (`missing|malformed|mismatch`) +
+  pesan "Kunci enkripsi tidak valid, masukkan ulang kredensial."; provider turun ke options → env; menyimpan secret
+  ditolak 400; kunci berubah → API key dan webhook secret wajib dimasukkan ulang bersamaan.
+- Urutan sumber: Admin → options provider → env (`DOIT_API_KEY`, `DOIT_WEBHOOK_SECRET`). Secret selalu diambil dari sumber
+  yang sama dengan API key.
+- API tidak pernah mengembalikan secret: hanya `{ is_set, masked }` (4 karakter terakhir) lewat `toPublicSettings`.
+- Webhook Medusa: route `/hooks/payment/doit_doit` **selalu menjawab 200** lalu memproses di subscriber (worker) setelah
+  `webhook_delay`. Verifikasi signature terjadi di worker; signature salah di-log + diabaikan, doit.id tidak melihat 401.
+  Pertimbangkan middleware verifikasi di route itu pada Fase 1 agar signature salah dijawab 401.
+
+## Arsitektur
+
+```
+src/
+  providers/doit/            Payment Module Provider (identifier "doit", id "doit")
+    service.ts               DoitPaymentProviderService extends AbstractPaymentProvider
+    client.ts                HTTP client: auth, Idempotency-Key, error mapping, rate limiter (token bucket 120/menit)
+    signature.ts             parse + verify PayBridge-Signature (crypto.timingSafeEqual, toleransi waktu t)
+    status.ts                mapping status doit → PaymentSessionStatus / PaymentActions
+  lib/credentials.ts         resolver kredensial: baca doit_setting via __pg_connection__, dekripsi, cache TTL
+  lib/crypto.ts, mask.ts     AES-256-GCM; masking 4 karakter terakhir
+  lib/public-settings.ts     satu-satunya bentuk setting yang keluar ke API (tanpa secret)
+  modules/doitSettings/      kredensial + konfigurasi (AES-256-GCM, kunci dari env DOIT_ENCRYPTION_KEY)
+  modules/doitLedger/        payment, event (dedupe), withdrawal, settlement import
+  workflows/                 save-settings, record-event, sync-payments, create-withdrawal, import-settlement
+  jobs/sync-doit-payments.ts cron */15 * * * *
+  api/admin/doit/...         settings, test-connection, stats, payments, export, withdrawals, settlements
+  admin/routes/doit/...      halaman Settings + Dashboard
+```
+
+Webhook memakai route bawaan Medusa: `POST /hooks/payment/doit_doit` → `getWebhookActionAndData({ data, rawData, headers })`.
+
+## Rencana fase
+
+### Fase 0 — Spike kredensial dari Admin
+Masalah: provider di-instansiasi dengan **container Payment Module** (hanya logger, dll.), tidak bisa `resolve` modul custom.
+Kandidat yang diuji, berurutan:
+1. Modul `doitSettings` + provider membaca DB langsung (pg connection/`__pg_connection__` di container modul) dan dekripsi sendiri.
+2. Cache proses bersama: loader/subscriber `doitSettings` menulis kredensial terdekripsi ke singleton in-process
+   yang dibaca provider (perlu invalidasi saat save; cek perilaku multi-instance / worker mode).
+3. Fallback: `options` di `medusa-config.ts` / env (`DOIT_API_KEY`, `DOIT_WEBHOOK_SECRET`). Admin hanya menampilkan status (read-only).
+Output: PoC kecil + laporan mana yang bekerja, keputusan final dicatat di sini. Urutan prioritas runtime: Admin → options → env.
+**Hasil (2026-10-25): opsi 1 dipakai** (opsi 2 ditolak karena server/worker terpisah). Lolos 54/54 check di mode shared,
+server+worker terpisah, dan kunci enkripsi hilang/rusak/salah. Lihat "Keputusan Fase 0".
+
+### Fase 1 — Payment provider
+- `initiatePayment`: tolak currency ≠ IDR; amount harus integer (`Number.isInteger`, tolak pecahan); rail dari setting
+  (`qris|va|transfer|any`) + `va_bank`; `expires_in`; `reference` = payment session id; `Idempotency-Key` = session id + hash input.
+  Data session menyimpan `id`, `hosted_url`, `qr_content`, `va_number`, `expires_at`.
+- `authorizePayment`/`getPaymentStatus`/`retrievePayment`: GET status → mapping (`pending`→pending, `paid`→authorized/captured,
+  `expired|failed`→error/canceled, `refunded`→captured+refund).
+- `capturePayment` no-op (doit langsung lunas), `cancelPayment` lokal (tidak ada endpoint cancel), `refundPayment` POST refunds,
+  `deletePayment`/`updatePayment` (buat payment baru bila amount berubah).
+- Webhook: verifikasi signature (raw body, constant time, toleransi t ±5 menit), dedupe event id (fase 1: tabel kecil / cache;
+  dipindah ke ledger di fase 2). `payment.paid` → `captured`. Kasus:
+  - **bayar_telat** (paid setelah expired / flag): tetap capture bila session masih ada; bila cart/order sudah dibatalkan → catat +
+    tandai perlu tindakan (fulfil atau refund) di ledger; opsi `late_payment_policy: "accept" | "flag"`.
+  - **bayar_ganda** (satu payment dibayar lewat dua instrumen): capture sekali saja (dedupe per payment id, bukan per event),
+    catat kelebihan bayar dan tandai "perlu refund kelebihan" di dashboard; jangan auto-refund.
+  - `webhook.test` & event tak dikenal → `not_supported` (200).
+
+### Fase 2 — Modul ledger
+- Model `doit_payment` (doit_id unik, reference, session/order id, gross, fee, net, fee_payer, status, rail, va_bank,
+  environment, flags[], paid_at, expires_at, raw json) dan `doit_event` (event_id unik, type, payment_id, received_at, payload).
+- Webhook dan sync menulis via workflow `record-doit-event` (upsert idempoten).
+- Job `*/15 * * * *`: paginasi `GET /v1/payments?limit=100&before=<created_at terakhir>` sampai melewati cursor tersimpan
+  (high-water mark + overlap kecil); limiter 120 req/menit + backoff saat 429; lock agar tidak jalan paralel.
+
+### Fase 3 — Admin
+- Settings: API key (masked), webhook signing secret, mode (terdeteksi dari prefix, peringatan bila tak cocok), rail default,
+  bank VA, expiry, tombol **Test koneksi** (GET /v1/payments?limit=1), URL webhook siap copy.
+- Dashboard: filter hari/minggu/bulan/custom; kartu sukses/menunggu/gagal/refund; gross/fee/net; saldo estimasi
+  (net paid − refund − withdraw − settlement terimport, fee payout Rp10.000/transfer); withdraw manual; import CSV settlement;
+  grafik harian; export CSV. Zona waktu Asia/Jakarta.
+
+### Fase 4 — Tes
+- Unit (jest + @swc/jest): signature (valid, salah, t kedaluwarsa, header rusak, panjang beda), mapping status, validasi amount/currency.
+- Integrasi (`@medusajs/test-utils`, skip otomatis tanpa `DOIT_TEST_API_KEY`): create → get → list sandbox, webhook end-to-end.
+
+### Fase 5 — Rilis
+- README EN + ID (instalasi, konfigurasi, webhook, disclaimer "not an official doit.id product"), CHANGELOG (Keep a Changelog),
+  GitHub Actions: CI (build/lint/test) + publish npm `--provenance` saat tag `v*` (permissions `id-token: write`).
+
+## Pertanyaan terbuka
+
+Terjawab oleh https://doit.id/docs/ (HTML): definisi `bayar_ganda`/`bayar_telat` dan bahwa keduanya ada di array `flags`;
+rate limit 120/menit + `Retry-After`; Idempotency-Key wajib di semua POST; body refund `{ amount?, reason? }` + kode error.
+
+Masih terbuka (verifikasi di sandbox `pb_test_`):
+- `bayar_ganda`: field mana yang memuat jumlah kelebihan bayar / instrumen kedua? `amount` tetap nominal tagihan?
+  Webhook mana yang dikirim untuk pembayaran kedua (`payment.paid` lagi dengan id event baru?).
+- Refund untuk `bayar_ganda`: bisakah `amount` melebihi nominal tagihan untuk mengembalikan kelebihan bayar?
+- Bentuk payload `refund.succeeded|refund.failed` (objek refund atau payment? ada id refund?).
+- Status setelah refund parsial (tetap `paid` atau `refunded`?).
+- `before` di `GET /v1/payments` membandingkan `created_at`? Urutan selalu terbaru dulu?
+- Toleransi timestamp signature dan apakah `v1` bisa berisi lebih dari satu signature saat rotasi secret.
+- Rail `transfer` butuh live key untuk mutasi; di sandbox mungkin terbatas.
+
+## Status
+
+- [x] Fase 0 · [ ] Fase 1 · [ ] Fase 2 · [ ] Fase 3 · [ ] Fase 4 · [ ] Fase 5
