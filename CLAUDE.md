@@ -6,6 +6,9 @@ Plugin open source (MIT) Medusa v2 (2.19.x) untuk payment gateway **doit.id** (P
 
 ## Aturan kerja
 
+- **Server ini juga menjalankan toko produksi hauskayu. DILARANG mengirim request apa pun ke port 9000, 8001, 80, 443
+  atau domain *.hauskayu.com, dan DILARANG menjalankan pm2 restart/stop/delete untuk proses hk-*.**
+  Tes hanya di port 9300+ dan container `doit-spike-*`. Cek port bebas sebelum start, batal kalau terpakai.
 - Kerjakan **per fase**. Setelah satu fase selesai (build + lint + tes hijau), berhenti dan tunggu "go" dari user.
 - **Jangan pernah commit API key / signing secret / kunci enkripsi.** Kredensial hanya lewat Admin (terenkripsi) atau env.
   `.env*` di-gitignore; tes integrasi membaca `DOIT_TEST_API_KEY` (`pb_test_…`) dari env, tidak di-hardcode.
