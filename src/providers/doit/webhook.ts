@@ -1,23 +1,30 @@
 import { PaymentActions } from "@medusajs/framework/utils"
 import type { LatePaymentPolicy } from "../../lib/credentials"
-import type { SessionState } from "./medusa-state"
+import type { AttentionCode } from "../../modules/doitLedger/models/doit-attention"
 import type { DoitPayment, DoitWebhookEvent } from "./types"
 
 export const SESSION_ID_PREFIX = "payses_"
 
-export type AttentionCode =
-  // paid after expiry, but the Medusa payment was already canceled: fulfil or refund
-  | "late_payment_canceled"
-  // paid after expiry and late_payment_policy is "flag": accept or refund
-  | "late_payment_flagged"
-  // bayar_ganda: same invoice paid through two instruments; refund the excess
-  | "overpaid"
-  // paid, but the Medusa session no longer exists
-  | "paid_without_session"
-  // paid an invoice the session no longer points to (amount changed in between)
-  | "superseded_invoice_paid"
-  // doit.id amount differs from the session amount
-  | "amount_mismatch"
+/**
+ * The Medusa payment session a doit.id payment belongs to, read through Query
+ * (see src/lib/session-state.ts). `null` means unknown: the caller falls back
+ * to the plain behaviour, Medusa's capture being idempotent.
+ */
+export type SessionState = {
+  session: {
+    id: string
+    status: string
+    amount: number | null
+    deleted: boolean
+    /** doit.id payment id currently attached to the session */
+    doitPaymentId: string | null
+  } | null
+  payment: {
+    id: string
+    captured: boolean
+    canceled: boolean
+  } | null
+}
 
 export type WebhookDecision = {
   action: PaymentActions

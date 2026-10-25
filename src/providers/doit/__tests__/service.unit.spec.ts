@@ -326,57 +326,11 @@ describe("getWebhookActionAndData", () => {
     data: { ...PENDING, id, status: "paid", flags },
   })
 
-  it("captures a signed payment.paid for an open session", async () => {
-    const pg = fakePg({
-      payment_session: { id: "payses_1", status: "pending", amount: "150000", data: { id: "pay_abc" }, deleted_at: null },
-      payment: undefined,
-    })
-    const { provider } = makeProvider({}, pg)
-    expect(await provider.getWebhookActionAndData(signed(paidEvent()))).toEqual({
-      action: PaymentActions.SUCCESSFUL,
-      data: { session_id: "payses_1", amount: 150000 },
-    })
-  })
-
-  it("does not re-check the timestamp in the worker", async () => {
+  it("leaves every event to the plugin subscriber (Medusa's handler must not capture)", async () => {
     const { provider } = makeProvider()
-    const old = signed(paidEvent(), SECRET, Math.floor(Date.now() / 1000) - 3600)
-    expect((await provider.getWebhookActionAndData(old)).action).toBe(PaymentActions.SUCCESSFUL)
-  })
-
-  it("ignores a wrong signature", async () => {
-    const { provider, logger } = makeProvider()
-    const out = await provider.getWebhookActionAndData(signed(paidEvent(), "wrong"))
-    expect(out).toEqual({ action: PaymentActions.NOT_SUPPORTED })
-    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("mismatch"))
-  })
-
-  it("bayar_ganda after capture: logs PERLU TINDAKAN overpaid and does not capture", async () => {
-    const pg = fakePg({
-      payment_session: { id: "payses_1", status: "authorized", amount: 150000, data: { id: "pay_abc" }, deleted_at: null },
-      payment: { id: "pay_m", captured_at: new Date(), canceled_at: null },
-    })
-    const { provider, logger } = makeProvider({}, pg)
-    const out = await provider.getWebhookActionAndData(signed(paidEvent(["bayar_ganda"])))
-    expect(out.action).toBe(PaymentActions.NOT_SUPPORTED)
-    expect(logger.warn).toHaveBeenCalledWith(expect.stringMatching(/PERLU TINDAKAN overpaid/))
-  })
-
-  it("bayar_telat on a canceled payment: logs PERLU TINDAKAN and does not capture", async () => {
-    const pg = fakePg({
-      payment_session: { id: "payses_1", status: "authorized", amount: 150000, data: { id: "pay_abc" }, deleted_at: null },
-      payment: { id: "pay_m", captured_at: null, canceled_at: new Date() },
-    })
-    const { provider, logger } = makeProvider({}, pg)
-    const out = await provider.getWebhookActionAndData(signed(paidEvent(["bayar_telat"])))
-    expect(out.action).toBe(PaymentActions.NOT_SUPPORTED)
-    expect(logger.warn).toHaveBeenCalledWith(expect.stringMatching(/PERLU TINDAKAN late_payment_canceled/))
-  })
-
-  it("webhook.test is not_supported", async () => {
-    const { provider } = makeProvider()
-    expect(await provider.getWebhookActionAndData(signed({ id: "evt_t", type: "webhook.test", data: {} }))).toEqual({
-      action: PaymentActions.NOT_SUPPORTED,
-    })
+    for (const event of [paidEvent(), paidEvent(["bayar_ganda"]), { id: "evt_t", type: "webhook.test", data: {} }]) {
+      expect(await provider.getWebhookActionAndData(signed(event))).toEqual({ action: PaymentActions.NOT_SUPPORTED })
+    }
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })

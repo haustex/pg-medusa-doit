@@ -1,9 +1,19 @@
 import { EventEmitter } from "node:events"
 import { ContainerRegistrationKeys } from "@medusajs/framework/utils"
 import { invalidateDoitCredentialsCache } from "../../../lib/credentials"
-import { clearSeenEvents } from "../../../providers/doit/event-dedupe"
 import { computeSignature } from "../../../providers/doit/signature"
 import { verifyDoitSignature } from "../verify-doit-signature"
+
+// Stand-in for the doit_event table: the unique event_id is the dedupe.
+const claimed = new Set<string>()
+const claimRun = jest.fn(async ({ input }: { input: { event_id: string } }) => {
+  const duplicate = claimed.has(input.event_id)
+  claimed.add(input.event_id)
+  return { result: { duplicate, id: "doitevt_1" } }
+})
+jest.mock("../../../workflows/claim-doit-event", () => ({
+  claimDoitEventWorkflow: () => ({ run: claimRun }),
+}))
 
 const SECRET = "whsec_FAKE_middleware_spec_1234"
 
@@ -81,7 +91,8 @@ async function run(reqOpts: Parameters<typeof makeReq>[0] = {}) {
 describe("verifyDoitSignature middleware", () => {
   beforeEach(() => {
     invalidateDoitCredentialsCache()
-    clearSeenEvents()
+    claimed.clear()
+    claimRun.mockClear()
     delete process.env.DOIT_WEBHOOK_SECRET
     delete process.env.DOIT_API_KEY
   })
@@ -126,11 +137,21 @@ describe("verifyDoitSignature middleware", () => {
     }
   })
 
+  it("claims the event in the database with its payment id", async () => {
+    await run({ body: { id: "evt_claim", type: "payment.paid", data: { id: "pay_9", status: "paid" } } })
+    expect(claimRun).toHaveBeenCalledWith({
+      input: {
+        event_id: "evt_claim",
+        type: "payment.paid",
+        doit_payment_id: "pay_9",
+        payload: { id: "evt_claim", type: "payment.paid", data: { id: "pay_9", status: "paid" } },
+      },
+    })
+  })
+
   it("answers a redelivered event 200 without queuing it again", async () => {
     const first = await run()
     expect(first.next).toHaveBeenCalled()
-    // Medusa's route answers 200
-    first.res.emit("finish")
 
     const second = await run()
     expect(second.next).not.toHaveBeenCalled()
@@ -138,11 +159,8 @@ describe("verifyDoitSignature middleware", () => {
     expect(second.res.body).toEqual({ received: true, duplicate: true })
   })
 
-  it("does not remember an event Medusa failed to queue", async () => {
-    const first = await run()
-    first.res.statusCode = 400
-    first.res.emit("finish")
-    const second = await run()
-    expect(second.next).toHaveBeenCalled()
+  it("does not claim anything for a rejected signature", async () => {
+    await run({ secret: "nope" })
+    expect(claimRun).not.toHaveBeenCalled()
   })
 })

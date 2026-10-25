@@ -37,12 +37,9 @@ import {
   resolveDoitCredentials,
 } from "../../lib/credentials"
 import { DoitApiError, DoitClient } from "./client"
-import { lookupSessionState } from "./medusa-state"
-import { SIGNATURE_HEADER, verifySignature } from "./signature"
 import { toSessionStatus } from "./status"
-import type { CreatePaymentBody, DoitPayment, DoitWebhookEvent } from "./types"
+import type { CreatePaymentBody, DoitPayment } from "./types"
 import { assertIdr, resolveRailBank, sanitizeReturnUrl, toRupiah } from "./validation"
-import { SESSION_ID_PREFIX, decideWebhookAction } from "./webhook"
 
 type InjectedDependencies = {
   logger: Logger
@@ -389,59 +386,17 @@ class DoitPaymentProviderService extends AbstractPaymentProvider<DoitProviderOpt
     }
   }
 
+  /**
+   * Always not_supported: doit.id webhooks are handled by the plugin's own
+   * subscriber (src/subscribers/doit-webhook-received.ts), which can write the
+   * ledger, count attempts and read the Medusa state through Query. This
+   * provider's container cannot reach other modules, so answering an action
+   * here would let Medusa's handler capture without any of that.
+   */
   async getWebhookActionAndData(
-    payload: ProviderWebhookPayload["payload"]
+    _payload: ProviderWebhookPayload["payload"]
   ): Promise<WebhookActionResult> {
-    const creds = await this.credentials()
-    if (!creds.webhookSecret) {
-      this.logger_.warn("[doit] Webhook ignored: no signing secret configured.")
-      return { action: PaymentActions.NOT_SUPPORTED }
-    }
-
-    // The route middleware already checked the signature and its timestamp on
-    // arrival; this re-check only guards the queued payload, so the timestamp
-    // is not checked again (processing can lag behind by webhook_delay + retries).
-    const result = verifySignature({
-      rawBody: payload.rawData,
-      header: payload.headers[SIGNATURE_HEADER] as string | string[] | undefined,
-      secret: creds.webhookSecret,
-      toleranceSeconds: 0,
-    })
-    if (!result.valid) {
-      this.logger_.warn(`[doit] Webhook rejected in worker: ${result.reason}.`)
-      return { action: PaymentActions.NOT_SUPPORTED }
-    }
-
-    const event = payload.data as unknown as DoitWebhookEvent
-    const payment = event?.data
-    const sessionId =
-      typeof payment?.reference === "string" && payment.reference.startsWith(SESSION_ID_PREFIX)
-        ? payment.reference
-        : undefined
-    const state =
-      sessionId && payment?.status === "paid"
-        ? await lookupSessionState(this.pg_, sessionId, this.logger_)
-        : null
-
-    const decision = decideWebhookAction(event, state, {
-      latePaymentPolicy: this.options_.late_payment_policy,
-    })
-    if (decision.attention) {
-      this.logger_.warn(
-        `[doit] PERLU TINDAKAN ${decision.attention.code} (event ${event.id}): ${decision.attention.message}`
-      )
-    }
-    this.logger_.info(
-      `[doit] Webhook ${event.id} ${event.type} ${payment?.id ?? "-"} status=${payment?.status ?? "-"} → ${decision.action}`
-    )
-
-    if (!decision.sessionId || decision.amount === undefined) {
-      return { action: decision.action }
-    }
-    return {
-      action: decision.action,
-      data: { session_id: decision.sessionId, amount: decision.amount },
-    }
+    return { action: PaymentActions.NOT_SUPPORTED }
   }
 }
 

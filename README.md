@@ -42,6 +42,29 @@ DOIT_ENCRYPTION_KEY=<output of openssl rand -hex 32>
 - Changing the key makes stored credentials unreadable. After changing it, re-enter the API key and webhook secret in the Admin.
 - Back up the key together with your database: without it the stored credentials cannot be recovered.
 
+### Payment methods (`rail`)
+
+| Rail | What the customer gets | Status |
+|---|---|---|
+| `qris` | QR code (`qr_content`) and the hosted page | Tested on the doit.id sandbox |
+| `va` + `va_bank` | Virtual Account number. Banks: `bmri` `bnia` `brin` `cimb` `permata` `maybank` `danamon` `bsyi` | Tested on the doit.id sandbox |
+| `any` | The customer picks the method on the doit.id hosted page | Supported |
+| `transfer` + `va_bank` (`bca` `mandiri` `bni` `bsi`) | Bank transfer to your own account, confirmed from account mutations | ⚠️ **Not yet testable on the sandbox.** The sandbox rejects this rail; it needs a live key and a Mutasi Rekening subscription. The code follows the documentation but is unverified. |
+
+The default rail is set in the Admin. The storefront may pass `rail` / `va_bank` (validated) and `return_url` in the
+payment session `data`. Only rails in the official doit.id documentation are offered.
+
+### Webhook and reconciliation
+
+- Webhook URL in the doit.id portal: `https://<your-medusa-backend>/hooks/payment/doit_doit`. Requests with a missing or
+  wrong `PayBridge-Signature`, or a timestamp more than 5 minutes off, are answered `401`.
+- Every delivery is recorded by event id (unique in the database), so redeliveries are answered `200` without being
+  processed twice, across any number of server and worker processes.
+- A job every 15 minutes re-reads payments from doit.id and completes orders whose payment is `paid` at doit.id but still
+  pending in Medusa (for example when a webhook was lost).
+- Cases that need a person (double payment, payment after an order was canceled, refund totals that do not match,
+  webhooks that failed after 3 attempts) are recorded as "perlu tindakan" items; nothing is refunded automatically.
+
 ---
 
 ## Bahasa Indonesia
@@ -66,6 +89,29 @@ DOIT_ENCRYPTION_KEY=<hasil openssl rand -hex 32>
   env `DOIT_API_KEY` / `DOIT_WEBHOOK_SECRET` bila diisi.
 - Mengganti kunci membuat kredensial lama tidak bisa dibaca. Setelah mengganti, isi ulang API key dan webhook secret di Admin.
 - Backup kunci bersama database: tanpa kunci itu, kredensial yang tersimpan tidak bisa dipulihkan.
+
+### Metode pembayaran (`rail`)
+
+| Rail | Yang diterima pembeli | Status |
+|---|---|---|
+| `qris` | Kode QR (`qr_content`) dan halaman bayar hosted | Sudah dites di sandbox doit.id |
+| `va` + `va_bank` | Nomor Virtual Account. Bank: `bmri` `bnia` `brin` `cimb` `permata` `maybank` `danamon` `bsyi` | Sudah dites di sandbox doit.id |
+| `any` | Pembeli memilih metode di halaman bayar hosted doit.id | Didukung |
+| `transfer` + `va_bank` (`bca` `mandiri` `bni` `bsi`) | Transfer ke rekening sendiri, dikonfirmasi dari mutasi rekening | ⚠️ **Belum bisa dites di sandbox.** Sandbox menolak rail ini; butuh live key dan langganan Mutasi Rekening. Kode mengikuti dokumentasi tetapi belum terverifikasi. |
+
+Rail default diatur di Admin. Storefront boleh mengirim `rail` / `va_bank` (divalidasi) dan `return_url` di `data`
+payment session. Hanya rail yang ada di dokumentasi resmi doit.id yang ditawarkan.
+
+### Webhook dan rekonsiliasi
+
+- Webhook URL di portal doit.id: `https://<backend-medusa-kamu>/hooks/payment/doit_doit`. Request tanpa
+  `PayBridge-Signature` yang benar, atau dengan timestamp lebih dari 5 menit, dijawab `401`.
+- Setiap kiriman dicatat per event id (unik di database), jadi kiriman ulang dijawab `200` tanpa diproses dua kali,
+  berapa pun jumlah proses server dan worker.
+- Job tiap 15 menit membaca ulang pembayaran dari doit.id dan menyelesaikan order yang sudah `paid` di doit.id tetapi
+  masih pending di Medusa (misalnya karena webhook hilang).
+- Kasus yang perlu keputusan orang (bayar ganda, bayar setelah order dibatalkan, total refund tidak cocok, webhook yang
+  gagal setelah 3 kali) dicatat sebagai item "perlu tindakan"; tidak ada refund otomatis.
 
 ---
 

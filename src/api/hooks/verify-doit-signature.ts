@@ -2,7 +2,7 @@ import type { MedusaNextFunction, MedusaRequest, MedusaResponse } from "@medusaj
 import { ContainerRegistrationKeys } from "@medusajs/framework/utils"
 import { resolveDoitCredentials } from "../../lib/credentials"
 import { getDoitProviderOptions } from "../../lib/provider-options"
-import { markEventSeen, wasEventSeen } from "../../providers/doit/event-dedupe"
+import { claimDoitEventWorkflow } from "../../workflows/claim-doit-event"
 import {
   DEFAULT_SIGNATURE_TOLERANCE_SECONDS,
   SIGNATURE_HEADER,
@@ -21,8 +21,9 @@ function reject(res: MedusaResponse, code: string, message: string) {
  *
  * Answers 401 when the PayBridge-Signature is missing, malformed, wrong, or
  * its timestamp is more than 5 minutes off, so doit.id retries and the
- * delivery shows as failed in the portal. A valid event that was already
- * accepted is answered 200 without being queued again.
+ * delivery shows as failed in the portal. A valid event is claimed in
+ * doit_event first; one already received is answered 200 without being
+ * queued again (see classifyRedelivery for when a delivery is re-queued).
  */
 export async function verifyDoitSignature(
   req: MedusaRequest,
@@ -60,19 +61,27 @@ export async function verifyDoitSignature(
     return reject(res, "invalid_signature", `Signature verification failed: ${result.reason}`)
   }
 
-  const eventId = (req.body as { id?: unknown } | undefined)?.id
-  if (typeof eventId === "string" && eventId) {
-    if (wasEventSeen(eventId)) {
-      logger.info(`[doit] Webhook ${eventId} already accepted; not queued again.`)
+  const body = (req.body ?? {}) as { id?: unknown; type?: unknown; data?: Record<string, unknown> }
+  if (typeof body.id === "string" && body.id) {
+    const data = body.data ?? {}
+    const paymentId =
+      (typeof data.id === "string" && data.id.startsWith("pay_") && data.id) ||
+      (typeof data.payment_id === "string" && data.payment_id) ||
+      null
+    // doit_event.event_id is unique, so this holds across server instances.
+    const { result } = await claimDoitEventWorkflow(req.scope).run({
+      input: {
+        event_id: body.id,
+        type: typeof body.type === "string" ? body.type : "unknown",
+        doit_payment_id: paymentId,
+        payload: body as Record<string, unknown>,
+      },
+    })
+    if (result.duplicate) {
+      logger.info(`[doit] Webhook ${body.id} already received; not queued again.`)
       res.status(200).json({ received: true, duplicate: true })
       return
     }
-    // Only remember it once Medusa has actually queued it (core route answers 200).
-    res.on("finish", () => {
-      if (res.statusCode >= 200 && res.statusCode < 300) {
-        markEventSeen(eventId)
-      }
-    })
   }
 
   return next()

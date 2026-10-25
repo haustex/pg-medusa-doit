@@ -55,8 +55,10 @@ describe("resolveRailBank", () => {
     expect(() => resolveRailBank("transfer", "bmri")).toThrow(/transfer/)
   })
 
-  it("rejects unknown rails", () => {
+  it("rejects unknown rails, including the undocumented cc", () => {
     expect(() => resolveRailBank("card" as never, null)).toThrow(/tidak dikenal/)
+    // the sandbox mentions a "cc" rail; it stays unavailable until doit.id documents it
+    expect(() => resolveRailBank("cc" as never, null)).toThrow(/tidak dikenal/)
   })
 })
 

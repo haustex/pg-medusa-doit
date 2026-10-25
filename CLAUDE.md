@@ -16,6 +16,9 @@ Plugin open source (MIT) Medusa v2 (2.19.x) untuk payment gateway **doit.id** (P
 - Ikuti skill `medusa-dev:building-with-medusa` (Module → Workflow → API route; mutasi lewat workflow; hanya GET/POST/DELETE;
   Zod dari `@medusajs/framework/zod` (v4); nama modul camelCase) dan `building-admin-dashboard-customizations` untuk UI.
 - Validasi: `npm run build` dan `npx medusa lint` setelah setiap perubahan berarti.
+- **Migrasi plugin:** `npx medusa plugin:db:generate` konek ke Postgres (default `localhost:5432` = DB produksi hauskayu!).
+  Selalu jalankan dengan `DB_HOST=127.0.0.1 DB_PORT=55432 DB_USERNAME=postgres DB_PASSWORD=spike` (container
+  `doit-spike-pg`; database `medusa-<modul>` dibuat dulu).
 - Medusa menyimpan harga apa adanya (Rp150.000 = `150000`). Jangan dikali/dibagi 100.
 
 ## Branding & identitas
@@ -86,16 +89,14 @@ Plugin open source (MIT) Medusa v2 (2.19.x) untuk payment gateway **doit.id** (P
 - Middleware `src/api/hooks/verify-doit-signature.ts`, matcher `/hooks/payment/:provider` + `bodyParser.preserveRawBody`,
   hanya bertindak untuk param `doit_<id>` (opsi provider dicari di `configModule.modules.payment.options.providers`).
   401 `invalid_signature` (mismatch / header hilang/rusak / body hilang / `t` lewat ±300 dtk) atau
-  `webhook_secret_not_configured`. Event id yang sudah diterima (respons 2xx) dijawab 200 `duplicate` tanpa di-queue lagi
-  (cache in-memory per proses, 24 jam; diganti ledger di Fase 2). Worker memverifikasi HMAC ulang **tanpa** cek `t`.
+  `webhook_secret_not_configured`. (Dedupe event id: lihat Fase 2.) Worker memverifikasi HMAC ulang **tanpa** cek `t`.
 - Webhook tidak pernah dipercaya sendirian: aksi `captured` → Medusa memanggil `authorizePayment` → GET ke doit.id. Payload
   palsu-bertanda-tangan untuk payment yang masih pending tidak membuat order (teruji di sandbox).
 - `reference` = payment session id (`payses_…`); event dengan reference lain diabaikan. Capture memakai `amount`
   (nominal tagihan), bukan `total_amount` (bisa termasuk fee yang dibayar pembeli).
-- Provider membaca tabel Payment Module `payment_session` / `payment` (read-only, lewat `__pg_connection__`) untuk
-  memutuskan webhook paid: sudah captured → no-op; `bayar_ganda` → capture sekali + log `PERLU TINDAKAN overpaid`;
-  payment Medusa canceled → tidak capture, log `late_payment_canceled`; session hilang / invoice lama / nominal beda →
-  log. `late_payment_policy` (`accept` default | `flag`). Log `[doit] PERLU TINDAKAN <code>` dipindah ke ledger di Fase 2.
+- Keputusan webhook paid (`decideWebhookAction`): sudah captured → no-op; `bayar_ganda` → capture sekali + `overpaid`;
+  payment Medusa canceled → tidak capture, `late_payment_canceled`; session hilang / invoice lama / nominal beda →
+  item perlu tindakan. `late_payment_policy` (`accept` default | `flag`). Sejak Fase 2 dijalankan di subscriber plugin.
 - Status: pending→pending, paid/refunded→captured, expired→canceled, failed→error. Cart complete saat pending gagal
   (order baru dibuat oleh webhook / authorize setelah paid).
 - `updatePayment` dengan nominal sama tidak memanggil API; nominal berubah → tagihan baru, id lama di `superseded_ids`.
@@ -104,6 +105,36 @@ Plugin open source (MIT) Medusa v2 (2.19.x) untuk payment gateway **doit.id** (P
 - Client: token bucket 120/menit per key per proses; retry 429/5xx/timeout dengan Idempotency-Key sama, hormati
   `Retry-After` (maks `max_retry_wait_ms` 15 dtk, `max_retries` 2); `provider_refund_failed` tidak di-retry.
 - Refund: Idempotency-Key = id refund Medusa; provider menolak refund melebihi sisa sendiri (sandbox tidak menolaknya).
+
+## Keputusan Fase 2 (ledger) — menggantikan sebagian Fase 1
+
+- Modul `doitLedger`: `doit_payment` (unik `doit_id`), `doit_event` (unik `event_id`), `doit_refund` (unik
+  `doit_refund_id` dan `medusa_refund_id`), `doit_attention` ("perlu tindakan", unik `dedupe_key` = `<code>:<kunci>`),
+  `doit_sync_state` (unik `key`). Semua tulisan lewat `recordDoitLedgerWorkflow` (upsert idempoten + kompensasi);
+  status dari webhook tidak pernah mundur (`mergeStatus`), tetapi hasil GET dari doit.id (sync, `authoritative`) selalu
+  menang; flags digabung. Sync membaca ulang payment sebelum settle, jadi status `paid` palsu/kedaluwarsa dibetulkan.
+- Dedupe webhook pindah ke DB: middleware menjalankan `claimDoitEventWorkflow` sebelum Medusa me-queue. Baris sudah ada →
+  `classifyRedelivery`: processed/ignored/in-flight (<5 menit atau sedang di-retry) → 200 `duplicate`; `failed` atau
+  klaim lama yang tak pernah diproses → di-queue ulang. Cache in-memory Fase 1 dihapus.
+- **Pemrosesan webhook pindah ke subscriber plugin** `doit-webhook-received` (event `payment.webhook_received`, worker).
+  `getWebhookActionAndData` provider selalu `not_supported`, jadi handler bawaan Medusa tidak menyentuh event doit.
+  Subscriber: verifikasi HMAC (tanpa `t`) → ledger → untuk `paid`: `settlePaidPayment` (state lewat **Query**, bukan baca
+  tabel mentah; `decideWebhookAction`; `processPaymentWorkflow` bila perlu capture) → event `processed`. Gagal →
+  `attempts+1`, error dilempar ulang supaya event bus me-retry; pada percobaan ke-`webhook_retries` (default 3) → event
+  `failed` + item `webhook_failed`, tidak dilempar lagi. Sukses berikutnya menutup item itu otomatis.
+- Refund: subscriber `payment.refunded` menyalin respons POST /refunds (disimpan provider di `payment.data.refunds`) ke
+  `doit_refund` (source `api`); webhook `refund.succeeded|failed` (bentuk payload belum pasti: objek refund `rf_…`,
+  `refund` bersarang, atau payment) di-upsert ke baris yang sama via `doit_refund_id` / `medusa_refund_id`.
+  `doit_payment.refunded_amount` = jumlah refund `succeeded`. Setelah tiap perubahan dibandingkan dengan total refund
+  Medusa → `refund_mismatch` bila beda atau melebihi nominal; `refund.failed` → `refund_failed`.
+- Job `sync-doit-payments` (`*/15`, override env `DOIT_SYNC_CRON`), per provider doit, lock Locking Module
+  (`acquire` dengan owner, lewati bila terkunci): (1) scan `GET /v1/payments?limit=100&before=` terbaru dulu sampai
+  `cursor − 15 menit` (run pertama 30 hari, maks 20 halaman); (2) baca ulang `pending` + `expired` ≤3 hari yang tidak
+  tersentuh scan (maks 100); (3) `paid` dengan session tapi `reconciled_at` kosong → `settlePaidPayment` (maks 50);
+  (4) event `received` dengan error >30 menit → `failed` + `webhook_failed`. `reconciled_at` diisi saat captured atau
+  diserahkan ke item perlu tindakan.
+- Rail `cc` (muncul di pesan error sandbox) tidak ditawarkan sampai ada di dokumentasi resmi; `resolveRailBank` menolaknya.
+  Rail `transfer` tetap di kode, ditandai "belum bisa dites di sandbox" di README.
 
 ## Arsitektur
 
@@ -114,18 +145,25 @@ src/
     client.ts                HTTP client: auth, Idempotency-Key, error mapping, rate limiter (token bucket 120/menit)
     signature.ts             parse + verify PayBridge-Signature (crypto.timingSafeEqual, toleransi waktu t)
     status.ts                mapping status doit → PaymentSessionStatus / PaymentActions
+    webhook.ts               decideWebhookAction (murni) + tipe SessionState
   lib/credentials.ts         resolver kredensial: baca doit_setting via __pg_connection__, dekripsi, cache TTL
   lib/crypto.ts, mask.ts     AES-256-GCM; masking 4 karakter terakhir
   lib/public-settings.ts     satu-satunya bentuk setting yang keluar ke API (tanpa secret)
+  lib/ledger.ts              mapping ledger murni: payment, refund (respons/webhook), redelivery, refund_mismatch
+  lib/session-state.ts       state session/cart/order/refund Medusa lewat Query
+  lib/doit-processing.ts     handleDoitWebhook, settlePaidPayment, handleMedusaRefund, checkRefundTotals
+  lib/doit-sync.ts           job sync (scan, recheck, settle, stale events)
   modules/doitSettings/      kredensial + konfigurasi (AES-256-GCM, kunci dari env DOIT_ENCRYPTION_KEY)
-  modules/doitLedger/        payment, event (dedupe), withdrawal, settlement import
-  workflows/                 save-settings, record-event, sync-payments, create-withdrawal, import-settlement
-  jobs/sync-doit-payments.ts cron */15 * * * *
-  api/admin/doit/...         settings, test-connection, stats, payments, export, withdrawals, settlements
+  modules/doitLedger/        payment, event, refund, attention, sync_state (withdrawal/settlement: Fase 3)
+  workflows/                 save-doit-settings, record-doit-ledger, claim-doit-event, save-doit-sync-state
+  subscribers/               doit-settings-updated, doit-webhook-received, doit-payment-refunded
+  jobs/sync-doit-payments.ts cron */15 * * * * (DOIT_SYNC_CRON)
+  api/hooks/                 middleware verifikasi signature + claim event
+  api/admin/doit/...         settings (Fase 3: test-connection, stats, payments, attention, export, withdrawals, settlements)
   admin/routes/doit/...      halaman Settings + Dashboard
 ```
 
-Webhook memakai route bawaan Medusa: `POST /hooks/payment/doit_doit` → `getWebhookActionAndData({ data, rawData, headers })`.
+Webhook: `POST /hooks/payment/doit_doit` → middleware plugin (signature, claim) → route core (queue) → subscriber plugin.
 
 ## Rencana fase
 
@@ -193,6 +231,7 @@ Hasil sandbox `pb_test_` (2026-10-25, Fase 1):
 - Rail `transfer` ditolak sandbox: 400 `invalid_request` "rail wajib 'qris', 'va', 'cc', atau 'any'" (ada rail `cc`
   yang tidak didokumentasikan).
 - Replay Idempotency-Key dengan body berbeda → 200 dengan payment asli.
+- `GET /v1/payments` terbaru dulu; `before=<created_at>` eksklusif terhadap `created_at` (tanpa tumpang tindih).
 
 Masih terbuka:
 - `bayar_ganda`: field mana yang memuat jumlah kelebihan bayar / instrumen kedua? `amount` tetap nominal tagihan?
@@ -200,10 +239,9 @@ Masih terbuka:
 - Refund untuk `bayar_ganda`: bisakah `amount` melebihi nominal tagihan untuk mengembalikan kelebihan bayar?
 - Bentuk payload webhook `refund.succeeded|refund.failed` (objek refund atau payment?).
 - Kapan status menjadi `refunded` di live (sandbox tidak pernah).
-- `before` di `GET /v1/payments` membandingkan `created_at`? Urutan selalu terbaru dulu?
 - Toleransi timestamp signature dan apakah `v1` bisa berisi lebih dari satu signature saat rotasi secret.
 - Rail `transfer` butuh live key untuk mutasi; di sandbox mungkin terbatas.
 
 ## Status
 
-- [x] Fase 0 · [x] Fase 1 · [ ] Fase 2 · [ ] Fase 3 · [ ] Fase 4 · [ ] Fase 5
+- [x] Fase 0 · [x] Fase 1 · [x] Fase 2 · [ ] Fase 3 · [ ] Fase 4 · [ ] Fase 5

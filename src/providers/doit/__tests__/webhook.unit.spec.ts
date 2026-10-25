@@ -1,7 +1,6 @@
 import { PaymentActions } from "@medusajs/framework/utils"
-import type { SessionState } from "../medusa-state"
 import type { DoitPayment, DoitWebhookEvent } from "../types"
-import { decideWebhookAction } from "../webhook"
+import { decideWebhookAction, type SessionState } from "../webhook"
 
 function payment(overrides: Partial<DoitPayment> = {}): DoitPayment {
   return {
