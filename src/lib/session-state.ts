@@ -1,6 +1,7 @@
 import type { MedusaContainer } from "@medusajs/framework/types"
 import { ContainerRegistrationKeys } from "@medusajs/framework/utils"
 import type { SessionState } from "../providers/doit/webhook"
+import { sessionIdFromReference } from "./ownership"
 
 type Logger = { warn: (msg: string) => void }
 
@@ -109,8 +110,7 @@ export async function resolveSessionId(
   payment: { id: string; reference?: unknown; metadata?: Record<string, unknown> | null },
   logger?: Logger
 ): Promise<string | null> {
-  const byReference =
-    typeof payment.reference === "string" && payment.reference.startsWith("payses_") ? payment.reference : null
+  const byReference = sessionIdFromReference(payment.reference)
   const collectionId = payment.metadata?.medusa_payment_collection_id
   if (typeof collectionId !== "string" || !collectionId) {
     return byReference

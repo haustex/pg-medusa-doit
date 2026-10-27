@@ -24,6 +24,16 @@ export type PublicDoitSettings = {
   /** absolute URL to paste in the doit.id portal, when the backend URL is known */
   webhook_url: string | null
   show_credit: boolean
+  reconciliation: {
+    /** metadata.medusa_store_id on every payment this store creates */
+    store_id: string | null
+    reference_prefix: string
+    /** effective cutoff (ISO): payments created before it are ignored */
+    ignore_before: string | null
+    /** setting = chosen in the Admin · credentials_saved = default */
+    ignore_before_source: DoitCredentials["ignoreBeforeSource"]
+    credentials_saved_at: string | null
+  }
 }
 
 /**
@@ -33,7 +43,8 @@ export type PublicDoitSettings = {
 export function toPublicSettings(
   creds: DoitCredentials,
   pluginOptions: Required<DoitPluginOptions> = { showCredit: true },
-  backendUrl: string | null = null
+  backendUrl: string | null = null,
+  storeId: string | null = null
 ): PublicDoitSettings {
   return {
     configured: !!creds.apiKey,
@@ -58,5 +69,12 @@ export function toPublicSettings(
     webhook_path: WEBHOOK_PATH,
     webhook_url: backendUrl ? `${backendUrl.replace(/\/+$/, "")}${WEBHOOK_PATH}` : null,
     show_credit: pluginOptions.showCredit,
+    reconciliation: {
+      store_id: storeId,
+      reference_prefix: creds.referencePrefix,
+      ignore_before: creds.ignoreBefore?.toISOString() ?? null,
+      ignore_before_source: creds.ignoreBeforeSource,
+      credentials_saved_at: creds.credentialsSavedAt?.toISOString() ?? null,
+    },
   }
 }

@@ -290,8 +290,8 @@ export const recalculateDoitRefundTotalsStep = createStep(
 
 export type UpsertDoitAttentionsInput = {
   attentions: LedgerAttentionInput[]
-  /** dedupe keys of open items to close automatically */
-  resolve: { dedupe_key: string; note: string }[]
+  /** dedupe keys of open items to close automatically (default status "resolved") */
+  resolve: { dedupe_key: string; note: string; status?: "resolved" | "dismissed" }[]
 }
 
 /**
@@ -331,7 +331,7 @@ export const upsertDoitAttentionsStep = createStep(
         comp.previous.push(restorable(current as Row))
         await service.updateDoitAttentions({
           id: current.id,
-          status: "resolved",
+          status: r.status ?? "resolved",
           resolved_at: new Date(),
           resolved_by: "system",
           resolution_note: r.note,

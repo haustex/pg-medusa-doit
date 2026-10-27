@@ -14,6 +14,13 @@ export type PublicSettings = {
   webhook_path: string
   webhook_url: string | null
   show_credit: boolean
+  reconciliation: {
+    store_id: string | null
+    reference_prefix: string
+    ignore_before: string | null
+    ignore_before_source: "setting" | "credentials_saved" | null
+    credentials_saved_at: string | null
+  }
 }
 
 export type RangeParams = { preset: "today" | "7d" | "month" | "custom"; from?: string; to?: string }

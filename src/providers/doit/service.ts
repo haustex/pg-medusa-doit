@@ -36,6 +36,7 @@ import {
   DoitRail,
   resolveDoitCredentials,
 } from "../../lib/credentials"
+import { referenceFor, STORE_MARKER_KEY, storeIdOf } from "../../lib/ownership"
 import { DoitApiError, DoitClient } from "./client"
 import { toSessionStatus } from "./status"
 import type { CreatePaymentBody, DoitPayment } from "./types"
@@ -321,15 +322,19 @@ class DoitPaymentProviderService extends AbstractPaymentProvider<DoitProviderOpt
     )
 
     const collectionId = await this.collectionIdOf(sessionId)
+    // Marks the payment as this store's: reconciliation ignores payments without it
+    // (other apps or stores on the same doit.id key, portal links).
+    const storeId = await storeIdOf(this.pg_)
     const body: CreatePaymentBody = {
       amount,
-      reference: sessionId,
+      reference: referenceFor(sessionId, creds.referencePrefix),
       rail,
       ...(va_bank ? { va_bank } : {}),
       expires_in: creds.expiresIn,
       ...(sanitizeReturnUrl(input.data?.return_url) ? { return_url: sanitizeReturnUrl(input.data?.return_url) } : {}),
       ...(customerOf(input.context) ? { customer: customerOf(input.context) } : {}),
       metadata: {
+        ...(storeId ? { [STORE_MARKER_KEY]: storeId } : {}),
         medusa_payment_session_id: sessionId,
         ...(collectionId ? { medusa_payment_collection_id: collectionId } : {}),
       },

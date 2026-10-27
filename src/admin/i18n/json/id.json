@@ -184,7 +184,18 @@
         "mismatch": "DOIT_ENCRYPTION_KEY tidak cocok dengan secret tersimpan"
       },
       "remove": "Hapus",
-      "remove_hint": "Hapus nilai tersimpan"
+      "remove_hint": "Hapus nilai tersimpan",
+      "reconciliation": "Rekonsiliasi",
+      "reconciliation_hint": "Hanya pembayaran yang dibuat toko ini yang direkonsiliasi. Pembayaran aplikasi atau toko lain pada key doit.id yang sama, mode lain (test/live), atau sebelum tanggal di bawah diabaikan dan tidak pernah masuk Perlu tindakan.",
+      "store_marker": "Penanda toko",
+      "store_marker_hint": "Dikirim sebagai metadata.medusa_store_id di setiap pembayaran yang dibuat toko ini.",
+      "reference_prefix": "Prefix referensi",
+      "reference_prefix_hint": "Opsional, tampil sebelum id session di kolom referensi portal doit.id, mis. HK-payses_…",
+      "ignore_before": "Abaikan pembayaran sebelum",
+      "ignore_before_hint": "Pembayaran doit.id yang lebih lama tidak direkonsiliasi.",
+      "ignore_before_chosen": "Mulai pukul 00:00 tanggal ini ({{tz}}). Kosongkan untuk memakai default.",
+      "ignore_before_default": "Default: {{date}}, saat API key pertama kali disimpan di sini.",
+      "ignore_before_none": "Tanpa tanggal: semua pembayaran dengan penanda toko ini direkonsiliasi."
     },
     "common": {
       "loading": "Memuat…",

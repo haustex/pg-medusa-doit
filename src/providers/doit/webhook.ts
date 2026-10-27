@@ -1,6 +1,7 @@
 import { PaymentActions } from "@medusajs/framework/utils"
 import type { LatePaymentPolicy } from "../../lib/credentials"
 import type { AttentionCode } from "../../modules/doitLedger/models/doit-attention"
+import { sessionIdFromReference } from "../../lib/ownership"
 import type { DoitPayment, DoitWebhookEvent } from "./types"
 
 export const SESSION_ID_PREFIX = "payses_"
@@ -63,10 +64,8 @@ export function decideWebhookAction(
   }
 
   // Payments created elsewhere (portal links, other integrations on the same key).
-  const sessionId =
-    typeof payment.reference === "string" && payment.reference.startsWith(SESSION_ID_PREFIX)
-      ? payment.reference
-      : undefined
+  // The reference may carry a prefix (settings → reference_prefix).
+  const sessionId = sessionIdFromReference(payment.reference) ?? undefined
   if (!sessionId) {
     return { action: PaymentActions.NOT_SUPPORTED }
   }

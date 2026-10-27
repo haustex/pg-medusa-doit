@@ -68,7 +68,8 @@ http
         qr_content: body.rail === "qris" ? `00020101021226MOCKQR${id}5303360540${String(body.amount).length}${body.amount}6304ABCD` : null,
         va_number: body.rail === "va" ? `8808000000${String(seq).padStart(4, "0")}` : null, va_bank: body.va_bank ?? null,
         hosted_url: `https://pay.doit.id/p/${id}`, return_url: body.return_url ?? null,
-        fee_amount: fee, fee_payer: method.fee_payer, total_amount: body.amount + (method.fee_payer === "customer" ? fee : 0), environment: "test",
+        fee_amount: fee, fee_payer: method.fee_payer, total_amount: body.amount + (method.fee_payer === "customer" ? fee : 0),
+        environment: (req.headers.authorization || "").includes("pb_live_") ? "live" : "test",
         expires_at: new Date(Date.now() + (body.expires_in ?? 86400) * 1000).toISOString(), paid_at: null,
         metadata: body.metadata ?? null, flags: [], customer: body.customer ?? null, created_at: new Date().toISOString(),
       }

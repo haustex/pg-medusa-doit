@@ -346,4 +346,15 @@ Masih terbuka:
   di log `verbose`), jadi `release.yml` kini menjalankan exchange sendiri (`/-/npm/v1/oidc/token/exchange/package/<nama>`,
   audience `npm:registry.npmjs.org`) dan mencetak claim (repository, workflow_ref, environment). `workflow_dispatch`
   = cek saja, tanpa publish. npm `^11.21.0` (dist-tag via OIDC), actions v7 (Node 24).
+- 0.1.2 rekonsiliasi per toko (`lib/ownership.ts`, `lib/reconcile-scope.ts`): payment baru membawa
+  `metadata.medusa_store_id` (id store Medusa, dibaca lewat `__pg_connection__`, cache per proses) dan reference
+  `<reference_prefix><payses_…>` (`sessionIdFromReference` toleran prefix). `classifyPayment`: mode (test/live vs key)
+  → cutoff (`ignore_before` ?? `credentials_saved_at`) → penanda toko; tanpa penanda tapi ada session id = legacy
+  (0.1.0/0.1.1), dihitung milik toko hanya bila session (atau session koleksi untuk invoice reuse) masih ada.
+  Webhook bukan milik toko → event `ignored` (last_error berisi alasan), tanpa ledger/item; refund hanya untuk payment
+  yang ada di ledger dan milik toko. Sync: scan hanya merekam milik toko; baris ledger lama yang bukan milik toko
+  difilter dari raw sebelum GET, baris unsettled ditandai `reconciled_at`; item terbuka untuk payment bukan milik toko
+  → `dismissed` + catatan. Kolom baru `doit_setting`: `reference_prefix`, `ignore_before`, `credentials_saved_at`
+  (migrasi mengisi `created_at` untuk instalasi lama yang sudah punya key; dibaca terpisah supaya tetap jalan sebelum
+  migrate). Suite 03 memakai `DOIT_SYNC_CRON` yang tidak pernah jalan (item seed-nya tanpa session).
 - [x] Fase 0 · [x] Fase 1 · [x] Fase 2 · [x] Fase 3 · [x] Fase 4 · [x] Fase 5 (siap rilis; publish npm + repo publik menunggu langkah manual user)

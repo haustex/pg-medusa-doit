@@ -61,6 +61,10 @@ const SettingsForm = ({ settings }: { settings: PublicSettings }) => {
   const [vaBank, setVaBank] = useState(settings.va_bank ?? "")
   const [minutes, setMinutes] = useState(String(Math.round(settings.expires_in / 60)))
   const [timezone, setTimezone] = useState(settings.timezone)
+  const rec = settings.reconciliation
+  const [prefix, setPrefix] = useState(rec.reference_prefix)
+  // "" = no date chosen here: the default (when the API key was first saved) applies
+  const [ignoreBefore, setIgnoreBefore] = useState(rec.ignore_before_source === "setting" ? dateInZone(rec.ignore_before, settings.timezone) : "")
   const [test, setTest] = useState<TestConnectionResult | null>(null)
 
   useEffect(() => {
@@ -68,6 +72,12 @@ const SettingsForm = ({ settings }: { settings: PublicSettings }) => {
     setVaBank(settings.va_bank ?? "")
     setMinutes(String(Math.round(settings.expires_in / 60)))
     setTimezone(settings.timezone)
+    setPrefix(settings.reconciliation.reference_prefix)
+    setIgnoreBefore(
+      settings.reconciliation.ignore_before_source === "setting"
+        ? dateInZone(settings.reconciliation.ignore_before, settings.timezone)
+        : ""
+    )
   }, [settings])
 
   const banks = rail === "va" ? VA_BANKS : rail === "transfer" ? TRANSFER_BANKS : []
@@ -75,7 +85,8 @@ const SettingsForm = ({ settings }: { settings: PublicSettings }) => {
   const minutesNum = Number(minutes)
   const valid =
     Number.isInteger(minutesNum) && minutesNum >= 1 && (!needsBank || banks.includes(vaBank)) && timezone.trim() !== "" &&
-    (!apiKey || /^pb_(test|live)_\S+$/.test(apiKey.trim()))
+    (!apiKey || /^pb_(test|live)_\S+$/.test(apiKey.trim())) &&
+    /^([A-Za-z0-9][A-Za-z0-9_-]{0,15})?$/.test(prefix.trim())
   const typedMode = apiKey.startsWith("pb_live_") ? "live" : apiKey.startsWith("pb_test_") ? "test" : null
   const currentMode = settings.environment === "production" ? "live" : settings.environment === "sandbox" ? "test" : null
   const mode = typedMode ?? currentMode
@@ -91,6 +102,8 @@ const SettingsForm = ({ settings }: { settings: PublicSettings }) => {
           va_bank: needsBank ? vaBank : null,
           expires_in: minutesNum * 60,
           timezone: timezone.trim(),
+          reference_prefix: prefix.trim() || null,
+          ignore_before: ignoreBefore || null,
         },
       }),
     onSuccess: () => {
@@ -224,6 +237,26 @@ const SettingsForm = ({ settings }: { settings: PublicSettings }) => {
         </Field>
       </Section>
 
+      <Section title={t("doit.settings.reconciliation")}>
+        <Text size="small" className="text-ui-fg-subtle">{t("doit.settings.reconciliation_hint")}</Text>
+        <Field id="doit-store-marker" label={t("doit.settings.store_marker")} hint={t("doit.settings.store_marker_hint")}>
+          <Input id="doit-store-marker" readOnly value={rec.store_id ?? "–"} className="w-full font-mono" />
+        </Field>
+        <Field id="doit-prefix" label={t("doit.settings.reference_prefix")} hint={t("doit.settings.reference_prefix_hint")}>
+          <Input id="doit-prefix" value={prefix} maxLength={16} placeholder="HK-" onChange={(e) => setPrefix(e.target.value)} className="w-40 font-mono" />
+        </Field>
+        <Field id="doit-ignore-before" label={t("doit.settings.ignore_before")} hint={t("doit.settings.ignore_before_hint")}>
+          <Input id="doit-ignore-before" type="date" value={ignoreBefore} onChange={(e) => setIgnoreBefore(e.target.value)} className="w-48" />
+          <Text size="xsmall" className="text-ui-fg-muted">
+            {ignoreBefore
+              ? t("doit.settings.ignore_before_chosen", { tz: settings.timezone })
+              : rec.credentials_saved_at
+                ? t("doit.settings.ignore_before_default", { date: dateInZone(rec.credentials_saved_at, settings.timezone) })
+                : t("doit.settings.ignore_before_none")}
+          </Text>
+        </Field>
+      </Section>
+
       <Section title={t("doit.settings.webhook")}>
         <Field id="doit-webhook" label={t("doit.settings.webhook_url")} hint={t("doit.settings.webhook_url_hint")}>
           <div className="flex w-full items-center gap-x-2">
@@ -238,6 +271,16 @@ const SettingsForm = ({ settings }: { settings: PublicSettings }) => {
       <CreditFooter showCredit={settings.show_credit} />
     </div>
   )
+}
+
+/** YYYY-MM-DD of an ISO instant in a time zone ("" when unset). */
+function dateInZone(iso: string | null, timezone: string): string {
+  if (!iso) return ""
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso))
+  } catch {
+    return iso.slice(0, 10)
+  }
 }
 
 export const config = defineRouteConfig({

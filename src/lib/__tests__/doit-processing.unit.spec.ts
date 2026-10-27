@@ -30,6 +30,18 @@ jest.mock("../session-state", () => ({
   resolveSessionId: jest.fn(async (_c: unknown, p: { reference?: string }) => p.reference ?? null),
 }))
 
+// Ownership rules are unit-tested in ownership.unit.spec.ts; here a reference
+// starting with AZPOR- stands for another app's payment on the same key.
+const foreign = (p: { reference?: unknown }) => String(p.reference ?? "").startsWith("AZPOR-")
+jest.mock("../reconcile-scope", () => ({
+  ownershipContext: jest.fn(async () => ({ storeId: "store_1", keyEnvironment: "sandbox", ignoreBefore: null })),
+  partitionOurs: jest.fn(async (_c: unknown, payments: { reference?: unknown }[]) => ({
+    ours: payments.filter((p) => !foreign(p)),
+    ignored: payments.filter(foreign).map((payment) => ({ payment, reason: "unmarked" })),
+  })),
+  isOurs: jest.fn(async (_c: unknown, p: { reference?: unknown }) => !foreign(p)),
+}))
+
 // eslint-disable-next-line import/first
 import { handleDoitWebhook, handleMedusaRefund } from "../doit-processing"
 
@@ -75,7 +87,16 @@ function makeContainer({
         },
       },
     },
-    doitLedger: { listDoitEvents: jest.fn(async () => (existingEvent ? [existingEvent] : [])) },
+    doitLedger: {
+      listDoitEvents: jest.fn(async () => (existingEvent ? [existingEvent] : [])),
+      listDoitPayments: jest.fn(async (filter: { doit_id?: string }) =>
+        filter.doit_id === "pay_1"
+          ? [{ doit_id: "pay_1", raw: { id: "pay_1", reference: "payses_1" } }]
+          : filter.doit_id === "pay_other"
+            ? [{ doit_id: "pay_other", raw: { id: "pay_other", reference: "AZPOR-77" } }]
+            : []
+      ),
+    },
     [ContainerRegistrationKeys.QUERY]: {
       graph: jest.fn(async () => ({ data: queryPayment ? [queryPayment] : [] })),
     },
@@ -189,6 +210,25 @@ describe("handleDoitWebhook", () => {
     expect(ledgerRuns[0].event).toMatchObject({ status: "processed", doit_payment_id: "pay_1" })
     // ledger says 70 000 refunded, Medusa 50 000 → refund_mismatch
     expect(ledgerRuns[1].attentions[0]).toMatchObject({ code: "refund_mismatch", amount: 20000 })
+  })
+
+  it("another app's payment.paid (AZPOR-…) is acknowledged as ignored: no ledger row, no capture, no item", async () => {
+    const { container } = makeContainer()
+    await handleDoitWebhook(container, signed(paid({ id: "pay_az", reference: "AZPOR-123" })))
+    expect(processRun).not.toHaveBeenCalled()
+    expect(ledgerRuns).toHaveLength(1)
+    expect(ledgerRuns[0].payments).toBeUndefined()
+    expect(ledgerRuns[0].attentions).toBeUndefined()
+    expect(ledgerRuns[0].event).toMatchObject({ status: "ignored", doit_payment_id: "pay_az" })
+    expect(ledgerRuns[0].event.last_error).toContain("unmarked")
+  })
+
+  it("refunds of payments this store does not know or own are ignored", async () => {
+    const { container } = makeContainer()
+    await handleDoitWebhook(container, signed({ id: "evt_ru", type: "refund.failed", data: { id: "rf_x", payment_id: "pay_unknown", amount: 1000 } }))
+    await handleDoitWebhook(container, signed({ id: "evt_ro", type: "refund.succeeded", data: { id: "rf_y", payment_id: "pay_other", amount: 1000, status: "succeeded" } }))
+    expect(ledgerRuns.map((r) => r.event.status)).toEqual(["ignored", "ignored"])
+    expect(ledgerRuns.every((r) => !r.refunds && !r.attentions)).toBe(true)
   })
 
   it("refund.failed raises refund_failed", async () => {

@@ -84,7 +84,9 @@ await runSuite(async () => {
   await sqlScript(seedSql())
   check("seeded ledger (SQL)", (await count("select count(*) n from doit_payment")) === rows.length + 5000)
 
-  const { up } = await startStack(logDir("03-admin"), { env: { DOIT_API_KEY: API_KEY, DOIT_WEBHOOK_SECRET: SECRET } })
+  // The seeded items have no Medusa session, so a sync run would (rightly) dismiss them:
+  // keep the job from firing during this suite.
+  const { up } = await startStack(logDir("03-admin"), { env: { DOIT_API_KEY: API_KEY, DOIT_WEBHOOK_SECRET: SECRET, DOIT_SYNC_CRON: "0 0 1 1 *" } })
   check("server :9300 + worker :9301 up", up)
   if (!up) return
 

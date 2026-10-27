@@ -1,6 +1,6 @@
 import type { AttentionCode } from "../modules/doitLedger/models/doit-attention"
 import type { DoitPayment, DoitWebhookEvent } from "../providers/doit/types"
-import { SESSION_ID_PREFIX } from "../providers/doit/webhook"
+import { sessionIdFromReference } from "./ownership"
 
 /** Shape written to doit_payment (upsert key: doit_id). */
 export type LedgerPaymentInput = {
@@ -73,7 +73,8 @@ function toInt(value: unknown, fallback = 0): number {
 }
 
 export function sessionIdOf(reference: unknown): string | null {
-  return typeof reference === "string" && reference.startsWith(SESSION_ID_PREFIX) ? reference : null
+  // tolerant of a reference prefix (settings → reference_prefix)
+  return sessionIdFromReference(reference)
 }
 
 /**

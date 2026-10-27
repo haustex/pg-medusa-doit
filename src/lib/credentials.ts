@@ -75,6 +75,15 @@ export type DoitCredentials = {
   expiresIn: number
   /** IANA zone for the Admin dashboard's day boundaries */
   timezone: string
+  /** put in front of the session id in doit.id's `reference` ("" = none) */
+  referencePrefix: string
+  /**
+   * Reconciliation ignores doit.id payments created before this: the Admin's
+   * "ignore before" date, else when an API key was first saved here.
+   */
+  ignoreBefore: Date | null
+  ignoreBeforeSource: "setting" | "credentials_saved" | null
+  credentialsSavedAt: Date | null
   encryption: {
     status: EncryptionStatus
     message: string | null
@@ -92,6 +101,9 @@ type StoredSettingRow = {
   va_bank: string | null
   expires_in: number | null
   timezone?: string | null
+  reference_prefix?: string | null
+  ignore_before?: Date | string | null
+  credentials_saved_at?: Date | string | null
 }
 
 type AdminLookup = {
@@ -182,6 +194,14 @@ export async function resolveDoitCredentials(
     vaBank: row?.va_bank ?? options.va_bank ?? null,
     expiresIn: row?.expires_in ?? options.expires_in ?? 86400,
     timezone: row?.timezone || "Asia/Jakarta",
+    referencePrefix: row?.reference_prefix ?? "",
+    ignoreBefore: toDateOrNull(row?.ignore_before) ?? toDateOrNull(row?.credentials_saved_at),
+    ignoreBeforeSource: toDateOrNull(row?.ignore_before)
+      ? "setting"
+      : toDateOrNull(row?.credentials_saved_at)
+        ? "credentials_saved"
+        : null,
+    credentialsSavedAt: toDateOrNull(row?.credentials_saved_at),
     encryption: {
       status: admin.status,
       message: adminUnavailable ? ENCRYPTION_KEY_INVALID_MESSAGE : null,
@@ -189,6 +209,28 @@ export async function resolveDoitCredentials(
     adminUnavailable,
   }
 }
+
+function toDateOrNull(value: Date | string | null | undefined): Date | null {
+  if (!value) {
+    return null
+  }
+  const d = value instanceof Date ? value : new Date(value)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+const BASE_COLUMNS = [
+  "api_key_encrypted",
+  "api_key_hint",
+  "webhook_secret_encrypted",
+  "encryption_key_fingerprint",
+  "rail",
+  "va_bank",
+  "expires_in",
+  "timezone",
+] as const
+// Added in 0.1.2. Read separately so an install that has not run the migration
+// yet keeps its credentials.
+const RECONCILE_COLUMNS = ["reference_prefix", "ignore_before", "credentials_saved_at"] as const
 
 async function lookupAdmin(
   pg: Knex | undefined,
@@ -221,21 +263,19 @@ async function readAdminSettings(
   }
 
   let row: StoredSettingRow | undefined
-  try {
-    row = await pg<StoredSettingRow>(DOIT_SETTINGS_TABLE)
-      .select(
-        "api_key_encrypted",
-        "api_key_hint",
-        "webhook_secret_encrypted",
-        "encryption_key_fingerprint",
-        "rail",
-        "va_bank",
-        "expires_in",
-        "timezone"
-      )
+  const read = (columns: readonly string[]) =>
+    pg<StoredSettingRow>(DOIT_SETTINGS_TABLE)
+      .select(...columns)
       .whereNull("deleted_at")
       .orderBy("updated_at", "desc")
       .first()
+  try {
+    try {
+      row = await read([...BASE_COLUMNS, ...RECONCILE_COLUMNS])
+    } catch {
+      row = await read(BASE_COLUMNS)
+      logger?.warn("[doit] doit_setting has no reconciliation columns yet; run `npx medusa db:migrate`.")
+    }
   } catch (e) {
     // Most likely migrations have not been run yet.
     logger?.warn(

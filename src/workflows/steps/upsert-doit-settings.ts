@@ -18,6 +18,10 @@ export type UpsertDoitSettingsInput = {
   va_bank?: string | null
   expires_in?: number
   timezone?: string
+  /** undefined keeps, null / "" removes */
+  reference_prefix?: string | null
+  /** undefined keeps, null removes (falls back to credentials_saved_at) */
+  ignore_before?: Date | null
 }
 
 type StoredSetting = Awaited<
@@ -44,6 +48,8 @@ export const upsertDoitSettingsStep = createStep(
     if (input.va_bank !== undefined) data.va_bank = input.va_bank
     if (input.expires_in !== undefined) data.expires_in = input.expires_in
     if (input.timezone !== undefined) data.timezone = input.timezone
+    if (input.reference_prefix !== undefined) data.reference_prefix = input.reference_prefix || null
+    if (input.ignore_before !== undefined) data.ignore_before = input.ignore_before
 
     const writesSecret = !!input.api_key || !!input.webhook_secret
     if (writesSecret) {
@@ -75,6 +81,10 @@ export const upsertDoitSettingsStep = createStep(
         data.api_key_encrypted = encryptSecret(input.api_key, key.key, "api_key")
         data.api_key_hint = apiKeyHint(input.api_key)
         data.environment = environmentFromKey(input.api_key)
+        // first key saved here: reconciliation ignores doit.id payments from before
+        if (!current?.credentials_saved_at) {
+          data.credentials_saved_at = new Date()
+        }
       }
       if (input.webhook_secret) {
         data.webhook_secret_encrypted = encryptSecret(

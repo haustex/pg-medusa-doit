@@ -13,7 +13,7 @@ export type RecordDoitLedgerInput = {
   payments?: LedgerPaymentInput[]
   refunds?: LedgerRefundInput[]
   attentions?: LedgerAttentionInput[]
-  resolve_attentions?: { dedupe_key: string; note: string }[]
+  resolve_attentions?: { dedupe_key: string; note: string; status?: "resolved" | "dismissed" }[]
   event?: SaveDoitEventInput
 }
 

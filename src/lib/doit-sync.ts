@@ -11,6 +11,8 @@ import { resolveDoitCredentials, type DoitProviderOptions } from "./credentials"
 import { settlePaidPayment } from "./doit-processing"
 import { attention, toLedgerPayment } from "./ledger"
 import { DOIT_PROVIDER_IDENTIFIER } from "./provider-options"
+import type { OwnershipContext } from "./ownership"
+import { ownershipContext, partitionOurs } from "./reconcile-scope"
 
 export const PAGE_SIZE = 100
 /** Pages per run: 2 000 payments, well inside 120 requests/minute with the limiter. */
@@ -39,6 +41,10 @@ export type SyncStats = {
   reconcile_errors: number
   attentions: number
   stale_events: number
+  /** payments of other apps / stores, the other mode or from before the cutoff */
+  ignored: number
+  /** open "perlu tindakan" items dismissed because their payment is not this store's */
+  dismissed: number
 }
 
 type ProviderEntry = { id?: string; resolve?: unknown; options?: DoitProviderOptions }
@@ -115,6 +121,8 @@ async function syncProvider(
     reconcile_errors: 0,
     attentions: 0,
     stale_events: 0,
+    ignored: 0,
+    dismissed: 0,
   }
 
   const creds = await resolveDoitCredentials(
@@ -136,6 +144,7 @@ async function syncProvider(
     return { ...stats, skipped: "locked" }
   }
 
+  const scope = await ownershipContext(container, creds)
   const stateKey = `payments:${providerId}`
   const service = container.resolve(DOIT_LEDGER_MODULE) as DoitLedgerModuleService
   const runStart = new Date()
@@ -163,11 +172,16 @@ async function syncProvider(
       stats.pages++
       if (!data?.length) break
       stats.scanned += data.length
-      await recordDoitLedgerWorkflow(container).run({
-        input: {
-          payments: data.map((p) => toLedgerPayment(p, { last_synced_at: new Date(), authoritative: true })),
-        },
-      })
+      // Only this store's payments enter the ledger (see src/lib/ownership.ts).
+      const { ours, ignored } = await partitionOurs(container, data, scope)
+      stats.ignored += ignored.length
+      if (ours.length) {
+        await recordDoitLedgerWorkflow(container).run({
+          input: {
+            payments: ours.map((p) => toLedgerPayment(p, { last_synced_at: new Date(), authoritative: true })),
+          },
+        })
+      }
       const pageNewest = newestCreatedAt(data)
       if (pageNewest && (!newest || pageNewest > newest)) newest = pageNewest
       const oldest = oldestCreatedAt(data)
@@ -180,7 +194,7 @@ async function syncProvider(
       { status: ["pending", "expired"], last_synced_at: { $lt: runStart } } as never,
       { take: MAX_RECHECKS * 2, order: { doit_created_at: "DESC" } }
     )
-    const recheck = open
+    const recheck = (await oursFromLedger(container, open, scope))
       .filter(
         (p) =>
           p.status === "pending" ||
@@ -200,10 +214,25 @@ async function syncProvider(
     }
 
     // 3. settle paid payments Medusa has not caught up with
-    const unsettled = await service.listDoitPayments(
+    const unsettledRows = await service.listDoitPayments(
       { status: "paid", reconciled_at: null, session_id: { $ne: null } } as never,
       { take: MAX_RECONCILES, order: { paid_at: "DESC" } }
     )
+    // Rows recorded by earlier versions for payments that are not this store's:
+    // marked handled so they stop coming back here, never settled.
+    const unsettled = await oursFromLedger(container, unsettledRows, scope)
+    const notOurs = unsettledRows.filter((r) => !unsettled.includes(r))
+    if (notOurs.length) {
+      await recordDoitLedgerWorkflow(container).run({
+        input: {
+          payments: notOurs.map((r) => ({
+            ...toLedgerPayment((r.raw ?? { id: r.doit_id, reference: r.reference, status: r.status, amount: r.amount }) as DoitPayment),
+            reconciled_at: new Date(),
+          })),
+        },
+      })
+      stats.ignored += notOurs.length
+    }
     for (const p of unsettled) {
       try {
         // Settle from doit.id's current answer, not from a webhook snapshot.
@@ -230,7 +259,10 @@ async function syncProvider(
       }
     }
 
-    // 4. webhooks stuck with errors (no retries configured, or the worker died mid-way)
+    // 4. open "perlu tindakan" items raised for payments that are not this store's
+    stats.dismissed = await dismissForeignAttentions(container, service, scope)
+
+    // 5. webhooks stuck with errors (no retries configured, or the worker died mid-way)
     const stale = await service.listDoitEvents(
       { status: "received", attempts: { $gt: 0 }, updated_at: { $lt: new Date(runStart.getTime() - STALE_EVENT_MS) } } as never,
       { take: 100 }
@@ -270,7 +302,7 @@ async function syncProvider(
       },
     })
     log.info(
-      `[doit] Sync ${providerId}: ${stats.scanned} scanned in ${stats.pages} page(s), ${stats.rechecked} re-read, ${stats.reconciled} settled, ${stats.attentions} perlu tindakan, ${stats.stale_events} stale webhook(s).`
+      `[doit] Sync ${providerId}: ${stats.scanned} scanned in ${stats.pages} page(s), ${stats.ignored} not this store's, ${stats.rechecked} re-read, ${stats.reconciled} settled, ${stats.attentions} perlu tindakan, ${stats.dismissed} dismissed, ${stats.stale_events} stale webhook(s).`
     )
     return stats
   } catch (e) {
@@ -283,4 +315,55 @@ async function syncProvider(
   } finally {
     await locking.release(lockKey, { ownerId: owner }).catch(() => undefined)
   }
+}
+
+type LedgerRow = Awaited<ReturnType<DoitLedgerModuleService["listDoitPayments"]>>[number]
+
+/** Ledger rows whose stored doit.id payment belongs to this store. */
+async function oursFromLedger(
+  container: MedusaContainer,
+  rows: LedgerRow[],
+  scope: OwnershipContext
+): Promise<LedgerRow[]> {
+  const asPayments = rows.map((r) => ({
+    ...((r.raw ?? {}) as Record<string, unknown>),
+    id: r.doit_id,
+    reference: (r.raw as Record<string, unknown> | null)?.reference ?? r.reference,
+    row: r,
+  }))
+  const { ours } = await partitionOurs(container, asPayments, scope)
+  return ours.map((p) => p.row)
+}
+
+/**
+ * Closes open items raised (by earlier versions) for payments that are not
+ * this store's: status "dismissed", with a note. Returns how many.
+ */
+async function dismissForeignAttentions(
+  container: MedusaContainer,
+  service: DoitLedgerModuleService,
+  scope: OwnershipContext
+): Promise<number> {
+  const open = await service.listDoitAttentions({ status: "open" } as never, { take: 200 })
+  const paymentIds = [...new Set(open.map((a) => a.doit_payment_id).filter((id): id is string => !!id))]
+  if (!paymentIds.length) {
+    return 0
+  }
+  const rows = await service.listDoitPayments({ doit_id: paymentIds } as never, { take: paymentIds.length })
+  const ours = new Set((await oursFromLedger(container, rows, scope)).map((r) => r.doit_id))
+  const known = new Set(rows.map((r) => r.doit_id))
+  const foreign = open.filter((a) => a.doit_payment_id && known.has(a.doit_payment_id) && !ours.has(a.doit_payment_id))
+  if (!foreign.length) {
+    return 0
+  }
+  await recordDoitLedgerWorkflow(container).run({
+    input: {
+      resolve_attentions: foreign.map((a) => ({
+        dedupe_key: a.dedupe_key,
+        status: "dismissed" as const,
+        note: "Diabaikan otomatis: bukan pembayaran toko ini (aplikasi/toko lain, mode test/live lain, atau sebelum tanggal batas).",
+      })),
+    },
+  })
+  return foreign.length
 }

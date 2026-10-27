@@ -21,6 +21,7 @@ import {
   toLedgerPayment,
 } from "./ledger"
 import { toOrderNote } from "./order-note"
+import { isOurs, ownershipContext, partitionOurs } from "./reconcile-scope"
 import { getDoitProviderOptions } from "./provider-options"
 import { loadSessionContext, resolveSessionId } from "./session-state"
 
@@ -223,6 +224,39 @@ export async function handleDoitWebhook(container: MedusaContainer, input: Webho
   }
 
   try {
+    // Only this store's payments are reconciled (see src/lib/ownership.ts): payments of
+    // other apps or stores on the same key, of the other mode (test/live) or from before
+    // the cutoff are acknowledged and otherwise ignored, never "perlu tindakan".
+    const scope = await ownershipContext(container, creds)
+    let foreign: string | null = null
+    if (isPayment) {
+      const part = await partitionOurs(container, [payment!], scope)
+      foreign = part.ours.length ? null : part.ignored[0].reason
+    } else if (refund) {
+      const [row] = await service.listDoitPayments({ doit_id: refund.doit_payment_id }, { take: 1 })
+      const raw = row?.raw as Record<string, unknown> | null | undefined
+      if (!row) {
+        foreign = "unknown_payment"
+      } else if (raw && !(await isOurs(container, { ...raw, id: row.doit_id }, scope))) {
+        foreign = "not_ours"
+      }
+    }
+    if (foreign) {
+      await recordDoitLedgerWorkflow(container).run({
+        input: {
+          event: {
+            ...eventBase,
+            status: "ignored",
+            attempts,
+            processed_at: new Date(),
+            last_error: `Bukan pembayaran toko ini (${foreign}).`,
+          },
+        },
+      })
+      log.info(`[doit] Webhook ${event.id} ${event.type} ${eventBase.doit_payment_id ?? ""} ignored: not this store's payment (${foreign}).`)
+      return
+    }
+
     if (refund) {
       const { result } = await recordDoitLedgerWorkflow(container).run({
         input: {

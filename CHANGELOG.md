@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-27
+
 ### Fixed
 
 - Release workflow: publishing through npm trusted publishing (OIDC) failed (`E404`, then `ENEEDAUTH`). The publish
@@ -16,6 +18,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Changed
 
 - GitHub Actions upgraded to `actions/checkout@v7`, `actions/setup-node@v7` and `actions/upload-artifact@v7` (Node 24).
+- Reconciliation only touches this store's payments. Payments of other apps or stores on the same doit.id key (e.g.
+  `AZPOR-…` references, portal links), of the other mode (a test payment while a live key is in use, and vice versa)
+  and from before the cutoff date are ignored by webhooks, the sync job and refund handling: no ledger row, no
+  "Perlu tindakan" item. Open items earlier versions raised for such payments are dismissed by the next sync run.
+  Payments of 0.1.0/0.1.1 (no marker yet) are still reconciled while their Medusa session exists.
+- Upgrading needs `npx medusa db:migrate` (new `doit_setting` columns); until then the plugin keeps working with the
+  previous settings.
+
+### Added
+
+- Every payment the plugin creates carries `metadata.medusa_store_id` (the Medusa store id) and a `reference` with an
+  optional prefix (Settings → doit.id → Reconciliation → Reference prefix, e.g. `HK-`).
+- Setting "Ignore payments before" (a date in the dashboard time zone). Default: when the API key was first saved in
+  the Admin (set for existing installs by the migration).
+- E2E suites for the reconciliation scope (test key) and a live key.
+- README: one doit.id app per store, and a separate app for testing.
 
 ## [0.1.1] - 2026-10-25
 
@@ -65,6 +83,7 @@ First public beta (`npm install medusa-payment-doit@beta`). Requires Medusa 2.19
 - Example components for the Medusa Next.js Starter (`examples/nextjs-starter`).
 - E2E suites against a mock doit.id and an opt-in sandbox suite; CI on every push and pull request.
 
-[Unreleased]: https://github.com/haustex/pg-medusa-doit/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/haustex/pg-medusa-doit/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/haustex/pg-medusa-doit/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/haustex/pg-medusa-doit/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/haustex/pg-medusa-doit/releases/tag/v0.1.0

@@ -34,6 +34,35 @@ export function dateIn(tz: string, instant: Date = new Date()): string {
   }).format(instant)
 }
 
+/** Milliseconds a time zone is ahead of UTC at an instant. */
+function offsetMs(tz: string, instant: number): number {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    })
+      .formatToParts(new Date(instant))
+      .map((p) => [p.type, p.value])
+  )
+  const asUtc = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute, +parts.second)
+  return asUtc - Math.floor(instant / 1000) * 1000
+}
+
+/** The instant a calendar date (YYYY-MM-DD) starts in a time zone, e.g. 00:00 WIB. */
+export function startOfDayIn(date: string, tz: string): Date {
+  const guess = Date.parse(`${date}T00:00:00Z`)
+  let instant = guess - offsetMs(tz, guess)
+  // across a DST change the offset at the result may differ from the guess's
+  instant = guess - offsetMs(tz, instant)
+  return new Date(instant)
+}
+
 /** Pure calendar arithmetic on YYYY-MM-DD strings (no time zone involved). */
 export function addDays(date: string, days: number): string {
   const d = new Date(`${date}T00:00:00Z`)

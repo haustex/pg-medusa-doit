@@ -117,6 +117,25 @@ If the encryption key is missing, malformed or different from the one used to sa
 running: the Admin shows **"Kunci enkripsi tidak valid, masukkan ulang kredensial."** and payments fall back to options
 or env. After changing the key, re-enter the API key and the secret.
 
+### One doit.id app per store
+
+doit.id's payment list and webhooks cover **everything on an API key**. Use **one doit.id app (key) per store**, and a
+**separate app with a `pb_test_` key for testing and staging**. Don't share a key between two shops, or between
+production and a staging copy.
+
+The plugin still guards against sharing. Every payment it creates carries `metadata.medusa_store_id` (this Medusa's
+store id) and a reference like `HK-payses_…`. Reconciliation (webhooks, the 15-minute job, refunds) only touches
+payments with this store's marker. These are ignored: no ledger row, never listed under "Needs action":
+
+- payments of other apps or stores on the same key (e.g. references like `AZPOR-…`, portal payment links);
+- payments of the other mode (a test payment while a live key is in use, and the other way round);
+- payments created before **Settings → doit.id → Reconciliation → "Ignore payments before"**. The default is when the
+  API key was first saved in the Admin.
+
+Payments made by plugin 0.1.0/0.1.1 (no marker yet) are still reconciled while their Medusa session exists. Items that
+earlier versions raised for payments that are not this store's are dismissed automatically by the next job run.
+The optional reference prefix (same page) only makes your payments easy to recognise in the doit.id portal.
+
 ### Webhook setup
 
 1. In the doit.id portal, set the webhook URL to `https://<your-medusa-backend>/hooks/payment/doit_doit`
@@ -181,6 +200,9 @@ session no longer exists, or arrived after the order was canceled, is listed the
 
 **The dashboard balance differs from doit.id.** It is an estimate (net of successful payments − refunds − withdrawals).
 doit.id has no balance API; check the portal before withdrawing.
+
+**I see payments of another app or a staging store in doit.id, but not in the dashboard.** That is intended: only
+payments carrying this store's marker are reconciled. Use one doit.id app per store (see above).
 
 **Can I use another currency?** No. doit.id charges in IDR only, and sessions in other currencies are rejected.
 
@@ -271,6 +293,26 @@ Kalau kunci enkripsi hilang, rusak, atau berbeda dari kunci saat kredensial disi
 menampilkan **"Kunci enkripsi tidak valid, masukkan ulang kredensial."** dan pembayaran memakai options atau env. Setelah
 mengganti kunci, isi ulang API key dan secret.
 
+### Satu aplikasi doit.id per toko
+
+Daftar pembayaran dan webhook doit.id mencakup **semua transaksi pada satu API key**. Pakai **satu aplikasi doit.id (key)
+per toko**, dan **aplikasi terpisah dengan key `pb_test_` untuk testing dan staging**. Jangan berbagi key antara dua
+toko, atau antara produksi dan salinan staging.
+
+Plugin tetap menjaga kalau key terlanjur dipakai bersama. Setiap pembayaran yang dibuatnya membawa
+`metadata.medusa_store_id` (id store Medusa ini) dan referensi seperti `HK-payses_…`. Rekonsiliasi (webhook, job 15
+menit, refund) hanya menyentuh pembayaran dengan penanda toko ini. Yang berikut diabaikan: tidak masuk ledger, tidak
+pernah masuk "Perlu tindakan":
+
+- pembayaran aplikasi atau toko lain pada key yang sama (mis. referensi `AZPOR-…`, link bayar dari portal);
+- pembayaran mode lain (pembayaran test saat key live dipakai, dan sebaliknya);
+- pembayaran yang dibuat sebelum **Pengaturan → doit.id → Rekonsiliasi → "Abaikan pembayaran sebelum"**. Defaultnya
+  saat API key pertama kali disimpan di Admin.
+
+Pembayaran dari plugin 0.1.0/0.1.1 (belum ada penanda) tetap direkonsiliasi selama session Medusa-nya masih ada. Item
+yang dulu dibuat versi lama untuk pembayaran yang bukan milik toko ini ditutup otomatis pada job berikutnya. Prefix
+referensi (opsional, halaman yang sama) hanya supaya pembayaranmu mudah dikenali di portal doit.id.
+
 ### Setup webhook
 
 1. Di portal doit.id, isi webhook URL `https://<backend-medusa-kamu>/hooks/payment/doit_doit` (halaman pengaturan Admin
@@ -334,6 +376,9 @@ sudah tidak ada, atau datang setelah order dibatalkan, tercatat di sana untuk di
 
 **Saldo dashboard beda dengan doit.id.** Itu estimasi (net pembayaran sukses − refund − withdraw). doit.id tidak punya
 API saldo; cek portal sebelum menarik dana.
+
+**Di doit.id ada pembayaran aplikasi lain atau toko staging, tapi tidak muncul di dashboard.** Memang begitu: hanya
+pembayaran dengan penanda toko ini yang direkonsiliasi. Pakai satu aplikasi doit.id per toko (lihat di atas).
 
 **Bisa pakai mata uang lain?** Tidak. doit.id hanya menerima IDR; session dengan mata uang lain ditolak.
 

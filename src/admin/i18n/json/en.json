@@ -184,7 +184,18 @@
         "mismatch": "DOIT_ENCRYPTION_KEY does not match the stored secrets"
       },
       "remove": "Remove",
-      "remove_hint": "Remove the stored value"
+      "remove_hint": "Remove the stored value",
+      "reconciliation": "Reconciliation",
+      "reconciliation_hint": "Only payments created by this store are reconciled. Payments of other apps or stores on the same doit.id key, of the other mode (test/live) or from before the date below are ignored and never listed under Needs action.",
+      "store_marker": "Store marker",
+      "store_marker_hint": "Sent as metadata.medusa_store_id with every payment this store creates.",
+      "reference_prefix": "Reference prefix",
+      "reference_prefix_hint": "Optional, shown before the session id in the doit.id portal's reference, e.g. HK-payses_…",
+      "ignore_before": "Ignore payments before",
+      "ignore_before_hint": "Older doit.id payments are not reconciled.",
+      "ignore_before_chosen": "From 00:00 on this date ({{tz}}). Clear it to use the default.",
+      "ignore_before_default": "Default: {{date}}, when the API key was first saved here.",
+      "ignore_before_none": "No date: all payments with this store's marker are reconciled."
     },
     "common": {
       "loading": "Loading…",
