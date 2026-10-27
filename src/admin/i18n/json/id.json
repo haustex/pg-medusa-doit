@@ -60,7 +60,15 @@
       "fee": "Fee",
       "net": "Net",
       "refunded": "Direfund",
-      "flags": "Penanda"
+      "flags": "Penanda",
+      "show_excluded": "Tampilkan yang dikecualikan",
+      "excluded": "Dikecualikan",
+      "excluded_reasons": {
+        "unmarked": "Bukan dibuat toko ini (aplikasi lain pada key doit.id yang sama, atau link bayar portal)",
+        "other_store": "Dibuat toko Medusa lain pada key doit.id yang sama",
+        "environment": "Mode (test/live) berbeda dengan API key yang dipakai",
+        "legacy_unknown": "Versi plugin lama, dan payment session Medusa-nya sudah tidak ada"
+      }
     },
     "status": {
       "paid": "Lunas",

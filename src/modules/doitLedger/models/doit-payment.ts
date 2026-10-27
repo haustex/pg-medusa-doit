@@ -33,6 +33,10 @@ const DoitPayment = model
     reconciled_at: model.dateTime().nullable(),
     last_synced_at: model.dateTime().nullable(),
     raw: model.json().nullable(),
+    // Not this store's payment (another app or store on the key, or the other mode):
+    // kept for the record, left out of every dashboard figure and of reconciliation.
+    excluded_at: model.dateTime().nullable(),
+    excluded_reason: model.text().nullable(),
   })
   .indexes([
     { on: ["status"] },
@@ -41,6 +45,7 @@ const DoitPayment = model
     { on: ["paid_at"] },
     { on: ["environment", "status"] },
     { on: ["order_id"] },
+    { on: ["excluded_at"] },
   ])
 
 export default DoitPayment

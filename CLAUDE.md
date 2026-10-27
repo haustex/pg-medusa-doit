@@ -357,4 +357,10 @@ Masih terbuka:
   → `dismissed` + catatan. Kolom baru `doit_setting`: `reference_prefix`, `ignore_before`, `credentials_saved_at`
   (migrasi mengisi `created_at` untuk instalasi lama yang sudah punya key; dibaca terpisah supaya tetap jalan sebelum
   migrate). Suite 03 memakai `DOIT_SYNC_CRON` yang tidak pernah jalan (item seed-nya tanpa session).
+- 0.1.3: `doit_payment.excluded_at/excluded_reason` (tidak pernah dihapus). Pembersihan sekali (`cleanupLedgerOnce`,
+  state `ledger-cleanup:v1`) pada sync pertama yang punya API key: aturan `classifyPayment` tanpa cutoff, baris dengan
+  order_id selalu dipertahankan; alasan unmarked|other_store|environment|legacy_unknown. Semua agregasi di
+  `reports.ts` memakai `excluded_at is null`; list/export `excluded=hide|include|only` (only mengabaikan filter mode).
+  Sync langkah 2/3 melewati baris excluded; baris unsettled yang bukan milik toko kini di-exclude. Refund webhook untuk
+  baris excluded → ignored. Dirilis dengan `publishConfig.tag: "latest"`.
 - [x] Fase 0 · [x] Fase 1 · [x] Fase 2 · [x] Fase 3 · [x] Fase 4 · [x] Fase 5 (siap rilis; publish npm + repo publik menunggu langkah manual user)

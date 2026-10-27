@@ -20,6 +20,7 @@ export async function GET(req: AuthenticatedMedusaRequest, res: MedusaResponse) 
       status: query.status,
       rail: query.rail,
       q: query.q,
+      excluded: query.excluded,
     },
     { limit: query.limit, offset: query.offset }
   )

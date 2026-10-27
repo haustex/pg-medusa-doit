@@ -26,7 +26,7 @@ starts Postgres and Redis services on the same ports.
 | `suites/02-ledger.mjs` | ledger rows, DB dedupe under concurrency, perlu-tindakan items, refund totals, retries giving up, sync job |
 | `suites/03-admin.mjs` | Admin API: settings, test connection, stats (seeded ledger, timezones), payments table, CSV export, withdrawals, CSV import, attention |
 | `suites/04-store.mjs` | store endpoints: access rules, throttled status refresh, cart completion after paid, methods with fees, rate limits, invoice reuse, order fee note |
-| `suites/05-reconcile-scope.mjs` | store marker and reference prefix; payments of other apps (`AZPOR-…`) and stores, the other mode, before the cutoff and of old versions are ignored; old items dismissed; cutoff date setting |
+| `suites/05-reconcile-scope.mjs` | store marker and reference prefix; payments of other apps (`AZPOR-…`) and stores, the other mode, before the cutoff and of old versions are ignored; old items dismissed; one-time ledger cleanup (excluded rows, dashboard totals, `excluded` filter, CSV); cutoff date setting |
 | `suites/06-live-key.mjs` | live key: a test payment with the store marker is ignored, own live payments are reconciled |
 | `sandbox/05-sandbox.mjs` | the real doit.id sandbox (`npm run test:sandbox`), skipped without `DOIT_TEST_API_KEY` |
 

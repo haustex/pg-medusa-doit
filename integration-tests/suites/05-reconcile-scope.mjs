@@ -2,7 +2,7 @@
 // other apps (AZPOR-…) and stores on the same key, the other mode, the cutoff date,
 // payments of earlier plugin versions, cleanup of old items. Test key; sync every minute.
 import {
-  api, cartDone, check, evtId, fakeCredentials, login, logDir, mockLog, mockPayment, mockSeed, mockSet,
+  api, BASE, cartDone, check, ctx, evtId, fakeCredentials, login, logDir, mockLog, mockPayment, mockSeed, mockSet,
   newCart, runSuite, setupStore, sleep, sql, sqlScript, startStack, waitFor, webhook,
 } from "../lib/harness.mjs"
 
@@ -15,6 +15,21 @@ const openItems = async () => (await sql("select dedupe_key from doit_attention 
 const daysAgo = (n) => new Date(Date.now() - n * 86_400_000).toISOString()
 
 await runSuite(async () => {
+  // Rows an earlier version wrote to the ledger, present before the first sync (and its one-time cleanup).
+  await sqlScript(`
+    insert into doit_payment (id, doit_id, reference, status, amount, fee_amount, net_amount, total_amount, fee_payer, rail, environment, raw, session_id, order_id, paid_at, doit_created_at)
+    values
+      ('doitpay_cl1', 'pay_cl_az', 'AZPOR-20261020-0007', 'paid', 111000, 0, 111000, 111000, 'merchant', 'qris', 'test',
+       '{"id":"pay_cl_az","reference":"AZPOR-20261020-0007","environment":"test","status":"paid"}', null, null, now() - interval '1 hour', now() - interval '2 hours'),
+      ('doitpay_cl2', 'pay_cl_other', 'payses_STAGINGX', 'paid', 222000, 0, 222000, 222000, 'merchant', 'qris', 'test',
+       '{"id":"pay_cl_other","reference":"payses_STAGINGX","environment":"test","status":"paid","metadata":{"medusa_store_id":"store_STAGING"}}', 'payses_STAGINGX', null, now() - interval '1 hour', now() - interval '2 hours'),
+      ('doitpay_cl3', 'pay_cl_live', 'payses_LIVE1', 'paid', 333000, 0, 333000, 333000, 'merchant', 'va', 'live',
+       '{"id":"pay_cl_live","reference":"payses_LIVE1","environment":"live","status":"paid"}', 'payses_LIVE1', null, now() - interval '1 hour', now() - interval '2 hours'),
+      ('doitpay_cl4', 'pay_cl_gone', 'payses_GONEX', 'pending', 44000, 0, 44000, 44000, 'merchant', 'qris', 'test',
+       '{"id":"pay_cl_gone","reference":"payses_GONEX","environment":"test","status":"pending"}', 'payses_GONEX', null, null, now() - interval '2 hours'),
+      ('doitpay_cl5', 'pay_cl_order', 'AZPOR-KEEP', 'paid', 55000, 0, 55000, 55000, 'merchant', 'qris', 'test',
+       '{"id":"pay_cl_order","reference":"AZPOR-KEEP","environment":"test","status":"paid"}', null, 'order_KEEP', now() - interval '1 hour', now() - interval '2 hours');
+  `)
   const { up } = await startStack(logDir("05-reconcile-scope"), { env: { DOIT_SYNC_CRON: "* * * * *" } })
   check("server :9300 + worker :9301 up", up)
   if (!up) return
@@ -57,7 +72,32 @@ await runSuite(async () => {
   check("refund.failed for another app's payment → ignored, no refund_failed item", (await waitFor(async () => (await eventStatus(refundEvt.id))?.status === "ignored", 20_000)) && !(await openItems()).some((k) => k.startsWith("refund_failed")))
   check("nothing raised under Perlu tindakan by those payments", !(await openItems()).some((k) => Object.values(foreign).some((p) => k.includes(p.id))), (await openItems()).join(","))
 
+  // --- one-time ledger cleanup on the first sync with credentials
+  const cleanupState = await waitFor(() => one("select last_success_at, stats from doit_sync_state where key = 'ledger-cleanup:v1' and last_success_at is not null"), 150_000, 3000)
+  const marks = Object.fromEntries((await sql("select doit_id, excluded_reason from doit_payment where doit_id like 'pay_cl_%'")).map((r) => [r.doit_id, r.excluded_reason]))
+  check("cleanup ran once and recorded its stats", cleanupState?.stats?.excluded === 4 && cleanupState.stats.by_reason?.unmarked === 1, JSON.stringify(cleanupState?.stats))
+  check("cleanup excluded other app / other store / other mode / gone legacy rows, with reasons", marks.pay_cl_az === "unmarked" && marks.pay_cl_other === "other_store" && marks.pay_cl_live === "environment" && marks.pay_cl_gone === "legacy_unknown", JSON.stringify(marks))
+  check("rows linked to an order are kept", marks.pay_cl_order === null)
+  check("excluded rows are kept (nothing deleted)", (await one("select count(*)::int n from doit_payment where doit_id like 'pay_cl_%' and deleted_at is null")).n === 5)
+
+  // dashboard figures leave excluded rows out
+  const stats = (await api("GET", "/admin/doit/stats?preset=month")).json.stats
+  const kept = await one(`select coalesce(sum(amount), 0)::int s from doit_payment where deleted_at is null and excluded_at is null and environment in ('test','sandbox')
+    and status in ('paid','refunded') and paid_at >= date_trunc('month', now() at time zone 'Asia/Jakarta') at time zone 'Asia/Jakarta'`)
+  check("dashboard: successful total = non-excluded rows only (AZPOR 111 000 not counted)", stats.success.amount === kept.s && kept.s > 0, `${stats.success.amount} vs ${kept.s}`)
+  const list = async (excluded) => (await api("GET", `/admin/doit/payments?preset=month&limit=100${excluded ? `&excluded=${excluded}` : ""}`)).json
+  const hidden = await list()
+  const shown = await list("include")
+  const only = await list("only")
+  check("transactions: excluded rows hidden by default", !hidden.payments.some((p) => p.doit_id.startsWith("pay_cl_") && p.doit_id !== "pay_cl_order"))
+  check("transactions: excluded=include shows them with the reason", shown.count === hidden.count + 4 && shown.payments.find((p) => p.doit_id === "pay_cl_az")?.excluded_reason === "unmarked", `${hidden.count} → ${shown.count}`)
+  check("transactions: excluded=only lists every excluded row, other mode included", only.count === 4 && only.payments.every((p) => p.excluded_at), String(only.count))
+  check("excluded=bogus → 400", (await api("GET", "/admin/doit/payments?excluded=bogus")).status === 400)
+  const csv = await (await fetch(`${BASE}/admin/doit/payments/export?preset=month&excluded=include`, { headers: { authorization: `Bearer ${ctx.token}`, accept: "text/csv" } })).text()
+  check("CSV export with excluded rows has the dikecualikan column filled", csv.split("\r\n")[0].endsWith(",dikecualikan") && csv.includes("pay_cl_az") && /pay_cl_az.*,unmarked/.test(csv))
+
   // --- an item an earlier version raised for another app's payment gets dismissed by the sync job
+  // (seeded after the cleanup ran: rows like pay_oldaz stay in the ledger, the cleanup runs only once)
   await sqlScript(`
     insert into doit_payment (id, doit_id, reference, status, amount, fee_amount, net_amount, total_amount, fee_payer, rail, environment, raw, session_id, doit_created_at)
     values ('doitpay_oldaz', 'pay_oldaz', 'AZPOR-OLD', 'paid', 50000, 0, 50000, 50000, 'merchant', 'qris', 'test',
@@ -77,7 +117,8 @@ await runSuite(async () => {
   check("sync ran: foreign payments counted as ignored, not scanned into the ledger", state?.stats?.ignored >= 5 && !(await inLedger(foreign.azpor.id)) && !(await inLedger(foreign.live.id)), JSON.stringify(state?.stats))
   const dismissed = await sql("select dedupe_key, status, resolution_note from doit_attention where id in ('doitatt_oldaz','doitatt_oldses') order by id")
   check("old items for payments that are not this store's → dismissed with a note", dismissed.length === 2 && dismissed.every((d) => d.status === "dismissed" && d.resolution_note.includes("bukan pembayaran toko ini")), JSON.stringify(dismissed))
-  check("old unsettled foreign row is not settled again (marked handled)", !!(await one("select reconciled_at from doit_payment where doit_id = 'pay_oldses'"))?.reconciled_at)
+  check("old unsettled foreign row is excluded instead of settled", (await one("select excluded_reason from doit_payment where doit_id = 'pay_oldses'"))?.excluded_reason === "legacy_unknown")
+  check("cleanup did not run again: pay_oldaz (added later) is not excluded", !(await one("select excluded_at from doit_payment where doit_id = 'pay_oldaz'"))?.excluded_at)
   check("own order still reconciled", !!(await one("select order_id from doit_payment where doit_id = $1", [a.session.data.id]))?.order_id)
 
   // --- the cutoff date chosen in the Admin

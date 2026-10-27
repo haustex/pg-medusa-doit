@@ -6,6 +6,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-10-27
+
+### Added
+
+- One-time ledger cleanup on the first sync after upgrading: ledger rows of payments that are not this store's
+  (another app or store on the doit.id key, the other test/live mode, or a 0.1.0/0.1.1 payment whose Medusa session
+  is gone) are marked excluded (`excluded_at`, `excluded_reason`). Nothing is deleted, and rows linked to an order
+  are always kept. The result is stored in the sync state `ledger-cleanup:v1`.
+- Transactions: "Show excluded" filter with an "Excluded" badge and the reason; `excluded=hide|include|only` on
+  `GET /admin/doit/payments` and the CSV export (new `dikecualikan` column).
+
+### Changed
+
+- Excluded rows are left out of every dashboard figure (cards, estimated balance, refunds, daily chart) and of
+  reconciliation; refund webhooks for them are ignored. Paid rows the sync job cannot settle because they are not
+  this store's are now excluded instead of only marked reconciled.
+- Published under the `latest` dist-tag (`npm install medusa-payment-doit`); 0.1.0–0.1.2 were `beta`.
+- Upgrading needs `npx medusa db:migrate` (new `doit_payment` columns).
+
 ## [0.1.2] - 2026-10-27
 
 ### Fixed
@@ -83,7 +102,8 @@ First public beta (`npm install medusa-payment-doit@beta`). Requires Medusa 2.19
 - Example components for the Medusa Next.js Starter (`examples/nextjs-starter`).
 - E2E suites against a mock doit.id and an opt-in sandbox suite; CI on every push and pull request.
 
-[Unreleased]: https://github.com/haustex/pg-medusa-doit/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/haustex/pg-medusa-doit/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/haustex/pg-medusa-doit/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/haustex/pg-medusa-doit/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/haustex/pg-medusa-doit/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/haustex/pg-medusa-doit/releases/tag/v0.1.0

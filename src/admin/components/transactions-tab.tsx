@@ -1,14 +1,18 @@
 import { ArrowDownTray } from "@medusajs/icons"
 import {
+  Badge,
   Button,
+  Checkbox,
   Container,
   createDataTableColumnHelper,
   DataTable,
   type DataTablePaginationState,
   Input,
+  Label,
   Select,
   Text,
   toast,
+  Tooltip,
   useDataTable,
 } from "@medusajs/ui"
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
@@ -43,19 +47,22 @@ export const TransactionsTab = ({ range, timezone }: { range: RangeParams; timez
   const [status, setStatus] = useState<string>(ALL)
   const [rail, setRail] = useState<string>(ALL)
   const [search, setSearch] = useState("")
+  // rows that are not this store's payments (other app/store on the key, other mode)
+  const [showExcluded, setShowExcluded] = useState(false)
   const q = useDebounced(search.trim())
   const [pagination, setPagination] = useState<DataTablePaginationState>({ pageIndex: 0, pageSize: PAGE_SIZE })
   const [exporting, setExporting] = useState(false)
   const paginationTranslations = usePaginationTranslations()
 
   // back to the first page whenever a filter changes
-  useEffect(() => setPagination((p) => ({ ...p, pageIndex: 0 })), [status, rail, q, range])
+  useEffect(() => setPagination((p) => ({ ...p, pageIndex: 0 })), [status, rail, q, range, showExcluded])
 
   const filters = {
     ...range,
     status: status === ALL ? undefined : status,
     rail: rail === ALL ? undefined : rail,
     q: q || undefined,
+    excluded: showExcluded ? "include" : undefined,
   }
   const params = { ...filters, limit: pagination.pageSize, offset: pagination.pageIndex * pagination.pageSize }
   const { data, isLoading } = useQuery({
@@ -93,6 +100,11 @@ export const TransactionsTab = ({ range, timezone }: { range: RangeParams; timez
           <div className="flex flex-col gap-1">
             <PaymentStatus status={row.original.status} />
             <Flags flags={row.original.flags} />
+            {row.original.excluded_at && (
+              <Tooltip content={t(`doit.table.excluded_reasons.${row.original.excluded_reason}`, { defaultValue: row.original.excluded_reason ?? "" })}>
+                <Badge size="2xsmall" color="grey">{t("doit.table.excluded")}</Badge>
+              </Tooltip>
+            )}
           </div>
         ),
       }),
@@ -197,6 +209,10 @@ export const TransactionsTab = ({ range, timezone }: { range: RangeParams; timez
                   ))}
                 </Select.Content>
               </Select>
+            </div>
+            <div className="flex items-center gap-x-2">
+              <Checkbox id="doit-show-excluded" checked={showExcluded} onCheckedChange={(v) => setShowExcluded(v === true)} />
+              <Label htmlFor="doit-show-excluded" size="small">{t("doit.table.show_excluded")}</Label>
             </div>
           </div>
           <Button size="small" variant="secondary" onClick={exportCsv} isLoading={exporting} disabled={exporting}>

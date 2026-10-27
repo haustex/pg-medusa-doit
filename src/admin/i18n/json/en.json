@@ -60,7 +60,15 @@
       "fee": "Fee",
       "net": "Net",
       "refunded": "Refunded",
-      "flags": "Flags"
+      "flags": "Flags",
+      "show_excluded": "Show excluded",
+      "excluded": "Excluded",
+      "excluded_reasons": {
+        "unmarked": "Not created by this store (another app on the same doit.id key, or a portal link)",
+        "other_store": "Created by another Medusa store on the same doit.id key",
+        "environment": "Other mode (test/live) than the API key in use",
+        "legacy_unknown": "Old plugin version, and its Medusa payment session no longer exists"
+      }
     },
     "status": {
       "paid": "Paid",

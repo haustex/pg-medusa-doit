@@ -237,6 +237,8 @@ export async function handleDoitWebhook(container: MedusaContainer, input: Webho
       const raw = row?.raw as Record<string, unknown> | null | undefined
       if (!row) {
         foreign = "unknown_payment"
+      } else if (row.excluded_at) {
+        foreign = `excluded:${row.excluded_reason ?? "?"}`
       } else if (raw && !(await isOurs(container, { ...raw, id: row.doit_id }, scope))) {
         foreign = "not_ours"
       }

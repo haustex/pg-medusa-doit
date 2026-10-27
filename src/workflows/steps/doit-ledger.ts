@@ -378,3 +378,33 @@ export const saveDoitSyncStateStep = createStep(
     for (const row of comp.previous) await service.updateDoitSyncStates(row as never)
   }
 )
+
+// ---------------------------------------------------------------- exclusion
+
+export type ExcludeDoitPaymentsInput = { exclusions: { doit_id: string; reason: string }[] }
+
+/**
+ * Marks ledger rows as not this store's (excluded_at + reason). Rows are kept,
+ * only left out of the dashboard and reconciliation; already excluded rows are
+ * left as they are. Compensation clears the marks it set.
+ */
+export const excludeDoitPaymentsStep = createStep(
+  "exclude-doit-payments",
+  async (input: ExcludeDoitPaymentsInput, { container }) => {
+    const service = ledger(container)
+    const marked: string[] = []
+    const now = new Date()
+    for (const { doit_id, reason } of input.exclusions) {
+      const [row] = await service.listDoitPayments({ doit_id, excluded_at: null } as never, { take: 1 })
+      if (!row) continue
+      await service.updateDoitPayments({ id: row.id, excluded_at: now, excluded_reason: reason })
+      marked.push(row.id)
+    }
+    return new StepResponse({ excluded: marked.length }, marked)
+  },
+  async (marked, { container }) => {
+    if (!marked?.length) return
+    const service = ledger(container)
+    for (const id of marked) await service.updateDoitPayments({ id, excluded_at: null, excluded_reason: null })
+  }
+)

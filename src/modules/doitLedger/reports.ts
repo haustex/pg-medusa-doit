@@ -61,6 +61,7 @@ export async function dashboardStats(knex: Knex, r: ReportRange): Promise<Dashbo
   const [payments, refunds, withdrawals, balance, attention] = await Promise.all([
     knex("doit_payment")
       .whereNull("deleted_at")
+      .whereNull("excluded_at")
       .whereIn("environment", envs)
       .select(
         knex.raw(
@@ -89,6 +90,7 @@ export async function dashboardStats(knex: Knex, r: ReportRange): Promise<Dashbo
       .join("doit_payment as p", "p.doit_id", "r.doit_payment_id")
       .whereNull("r.deleted_at")
       .whereNull("p.deleted_at")
+      .whereNull("p.excluded_at")
       .where("r.status", "succeeded")
       .whereIn("p.environment", envs)
       .where("r.created_at", ">=", start)
@@ -106,9 +108,10 @@ export async function dashboardStats(knex: Knex, r: ReportRange): Promise<Dashbo
       .select(
         knex.raw(
           `(select coalesce(sum(net_amount), 0) from doit_payment
-             where deleted_at is null and status = any(?) and environment = any(?)) as net_paid,
+             where deleted_at is null and excluded_at is null and status = any(?) and environment = any(?)) as net_paid,
            (select coalesce(sum(r.amount), 0) from doit_refund r join doit_payment p on p.doit_id = r.doit_payment_id
-             where r.deleted_at is null and p.deleted_at is null and r.status = 'succeeded' and p.environment = any(?)) as refunded,
+             where r.deleted_at is null and p.deleted_at is null and p.excluded_at is null
+               and r.status = 'succeeded' and p.environment = any(?)) as refunded,
            (select coalesce(sum(amount + fee_amount), 0) from doit_withdrawal
              where deleted_at is null and environment = ?) as withdrawn`,
           [PAID, envs, envs, r.mode]
@@ -145,6 +148,7 @@ export type DailyPoint = { date: string; count: number; gross: number; net: numb
 export async function dailySeries(knex: Knex, r: ReportRange): Promise<DailyPoint[]> {
   const rows = await knex("doit_payment")
     .whereNull("deleted_at")
+    .whereNull("excluded_at")
     .whereIn("environment", ENVIRONMENTS_BY_MODE[r.mode])
     .whereIn("status", PAID)
     .where("paid_at", ">=", knex.raw("?::timestamp at time zone ?", [r.from, r.timezone]))
@@ -173,6 +177,8 @@ export type PaymentFilters = {
   status?: string[]
   rail?: string[]
   q?: string
+  /** hide (default): leave out excluded rows · include: show them too · only: just them */
+  excluded?: "hide" | "include" | "only"
 }
 
 function escapeLike(value: string): string {
@@ -181,7 +187,18 @@ function escapeLike(value: string): string {
 
 /** Shared WHERE for the transaction table and the CSV export (filters on doit_created_at). */
 export function paymentQuery(knex: Knex, f: PaymentFilters) {
-  const query = knex("doit_payment").whereNull("deleted_at").whereIn("environment", ENVIRONMENTS_BY_MODE[f.mode])
+  const query = knex("doit_payment").whereNull("deleted_at")
+  if (f.excluded === "only") {
+    // excluded rows include payments of the other mode, so the mode filter does not apply
+    query.whereNotNull("excluded_at")
+  } else {
+    query.where((w) => {
+      w.whereIn("environment", ENVIRONMENTS_BY_MODE[f.mode]).whereNull("excluded_at")
+      if (f.excluded === "include") {
+        w.orWhereNotNull("excluded_at")
+      }
+    })
+  }
   if (f.from) {
     query.where("doit_created_at", ">=", knex.raw("?::timestamp at time zone ?", [f.from, f.timezone]))
   }
@@ -229,6 +246,8 @@ export const PAYMENT_COLUMNS = [
   "paid_at",
   "expires_at",
   "doit_created_at",
+  "excluded_at",
+  "excluded_reason",
 ] as const
 
 export async function listPayments(

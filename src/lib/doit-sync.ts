@@ -5,6 +5,7 @@ import { DOIT_LEDGER_MODULE } from "../modules/doitLedger"
 import type DoitLedgerModuleService from "../modules/doitLedger/service"
 import { DoitClient } from "../providers/doit/client"
 import type { DoitPayment } from "../providers/doit/types"
+import { excludeDoitPaymentsWorkflow } from "../workflows/exclude-doit-payments"
 import { recordDoitLedgerWorkflow } from "../workflows/record-doit-ledger"
 import { saveDoitSyncStateWorkflow } from "../workflows/save-doit-sync-state"
 import { resolveDoitCredentials, type DoitProviderOptions } from "./credentials"
@@ -45,7 +46,15 @@ export type SyncStats = {
   ignored: number
   /** open "perlu tindakan" items dismissed because their payment is not this store's */
   dismissed: number
+  /** one-time ledger cleanup after upgrading to 0.1.3 (only on the run that did it) */
+  cleanup?: LedgerCleanupStats
 }
+
+export type LedgerCleanupStats = { checked: number; excluded: number; by_reason: Record<string, number> }
+
+/** Sync-state key of the one-time ledger cleanup; a row with last_success_at means done. */
+export const LEDGER_CLEANUP_KEY = "ledger-cleanup:v1"
+const CLEANUP_BATCH = 500
 
 type ProviderEntry = { id?: string; resolve?: unknown; options?: DoitProviderOptions }
 
@@ -150,6 +159,9 @@ async function syncProvider(
   const runStart = new Date()
   try {
     const [state] = await service.listDoitSyncStates({ key: stateKey }, { take: 1 })
+    // 0. once after upgrading: mark ledger rows that are not this store's as excluded
+    const cleanup = await cleanupLedgerOnce(container, service, scope, log)
+    if (cleanup) stats.cleanup = cleanup
     const client = new DoitClient({
       apiKey: creds.apiKey,
       baseUrl: options.api_base_url,
@@ -191,7 +203,7 @@ async function syncProvider(
 
     // 2. re-read open payments the scan did not refresh
     const open = await service.listDoitPayments(
-      { status: ["pending", "expired"], last_synced_at: { $lt: runStart } } as never,
+      { status: ["pending", "expired"], last_synced_at: { $lt: runStart }, excluded_at: null } as never,
       { take: MAX_RECHECKS * 2, order: { doit_created_at: "DESC" } }
     )
     const recheck = (await oursFromLedger(container, open, scope))
@@ -215,21 +227,15 @@ async function syncProvider(
 
     // 3. settle paid payments Medusa has not caught up with
     const unsettledRows = await service.listDoitPayments(
-      { status: "paid", reconciled_at: null, session_id: { $ne: null } } as never,
+      { status: "paid", reconciled_at: null, session_id: { $ne: null }, excluded_at: null } as never,
       { take: MAX_RECONCILES, order: { paid_at: "DESC" } }
     )
-    // Rows recorded by earlier versions for payments that are not this store's:
-    // marked handled so they stop coming back here, never settled.
-    const unsettled = await oursFromLedger(container, unsettledRows, scope)
-    const notOurs = unsettledRows.filter((r) => !unsettled.includes(r))
+    // Rows that are not this store's (e.g. its session is gone and it carries no store
+    // marker) are excluded instead of settled, so they stop coming back here.
+    const { ours: unsettled, ignored: notOurs } = await partitionLedger(container, unsettledRows, scope)
     if (notOurs.length) {
-      await recordDoitLedgerWorkflow(container).run({
-        input: {
-          payments: notOurs.map((r) => ({
-            ...toLedgerPayment((r.raw ?? { id: r.doit_id, reference: r.reference, status: r.status, amount: r.amount }) as DoitPayment),
-            reconciled_at: new Date(),
-          })),
-        },
+      await excludeDoitPaymentsWorkflow(container).run({
+        input: { exclusions: notOurs.map(({ row, reason }) => ({ doit_id: row.doit_id, reason })) },
       })
       stats.ignored += notOurs.length
     }
@@ -319,20 +325,82 @@ async function syncProvider(
 
 type LedgerRow = Awaited<ReturnType<DoitLedgerModuleService["listDoitPayments"]>>[number]
 
-/** Ledger rows whose stored doit.id payment belongs to this store. */
-async function oursFromLedger(
+/** Splits ledger rows by their stored doit.id payment: this store's, or not (with the reason). */
+async function partitionLedger(
   container: MedusaContainer,
   rows: LedgerRow[],
   scope: OwnershipContext
-): Promise<LedgerRow[]> {
+): Promise<{ ours: LedgerRow[]; ignored: { row: LedgerRow; reason: string }[] }> {
   const asPayments = rows.map((r) => ({
     ...((r.raw ?? {}) as Record<string, unknown>),
     id: r.doit_id,
     reference: (r.raw as Record<string, unknown> | null)?.reference ?? r.reference,
+    environment: (r.raw as Record<string, unknown> | null)?.environment ?? r.environment,
     row: r,
   }))
-  const { ours } = await partitionOurs(container, asPayments, scope)
-  return ours.map((p) => p.row)
+  const { ours, ignored } = await partitionOurs(container, asPayments, scope)
+  return {
+    ours: ours.map((p) => p.row),
+    ignored: ignored.map(({ payment, reason }) => ({ row: payment.row, reason })),
+  }
+}
+
+async function oursFromLedger(container: MedusaContainer, rows: LedgerRow[], scope: OwnershipContext): Promise<LedgerRow[]> {
+  return (await partitionLedger(container, rows, scope)).ours
+}
+
+/**
+ * Runs once per install (state LEDGER_CLEANUP_KEY): marks ledger rows written
+ * by earlier versions for payments that are not this store's as excluded:
+ * other apps or stores on the key, the other mode, or 0.1.0/0.1.1 payments
+ * whose Medusa session is gone. Rows linked to an order are always kept. The
+ * cutoff date is not a reason to exclude. Nothing is deleted.
+ */
+export async function cleanupLedgerOnce(
+  container: MedusaContainer,
+  service: DoitLedgerModuleService,
+  scope: OwnershipContext,
+  log: Logger
+): Promise<LedgerCleanupStats | null> {
+  const [done] = await service.listDoitSyncStates({ key: LEDGER_CLEANUP_KEY }, { take: 1 })
+  if (done?.last_success_at) {
+    return null
+  }
+  const started = new Date()
+  const cleanupScope = { ...scope, ignoreBefore: null }
+  const stats: LedgerCleanupStats = { checked: 0, excluded: 0, by_reason: {} }
+  let after = ""
+  for (;;) {
+    const rows = await service.listDoitPayments(
+      { id: { $gt: after }, excluded_at: null } as never,
+      { take: CLEANUP_BATCH, order: { id: "ASC" } }
+    )
+    if (!rows.length) break
+    after = rows[rows.length - 1].id
+    stats.checked += rows.length
+    const { ignored } = await partitionLedger(container, rows.filter((r) => !r.order_id), cleanupScope)
+    if (ignored.length) {
+      await excludeDoitPaymentsWorkflow(container).run({
+        input: { exclusions: ignored.map(({ row, reason }) => ({ doit_id: row.doit_id, reason })) },
+      })
+      stats.excluded += ignored.length
+      for (const { reason } of ignored) stats.by_reason[reason] = (stats.by_reason[reason] ?? 0) + 1
+    }
+    if (rows.length < CLEANUP_BATCH) break
+  }
+  await saveDoitSyncStateWorkflow(container).run({
+    input: {
+      key: LEDGER_CLEANUP_KEY,
+      last_run_at: started,
+      last_success_at: new Date(),
+      last_error: null,
+      stats: stats as unknown as Record<string, unknown>,
+    },
+  })
+  log.info(
+    `[doit] Ledger cleanup: ${stats.checked} row(s) checked, ${stats.excluded} excluded as not this store's ${JSON.stringify(stats.by_reason)}.`
+  )
+  return stats
 }
 
 /**

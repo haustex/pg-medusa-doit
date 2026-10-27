@@ -3,13 +3,13 @@
 **Terima QRIS, VA, dan transfer di Medusa lewat doit.id. Dibuat dan dipakai sendiri oleh Haus Kayu.**
 <br>Accept QRIS, Virtual Account and bank transfer in Medusa v2 through doit.id. Built and used in production by Haus Kayu.
 
-[![npm](https://img.shields.io/npm/v/medusa-payment-doit/beta?label=npm%40beta)](https://www.npmjs.com/package/medusa-payment-doit)
+[![npm](https://img.shields.io/npm/v/medusa-payment-doit)](https://www.npmjs.com/package/medusa-payment-doit)
 [![CI](https://github.com/haustex/pg-medusa-doit/actions/workflows/ci.yml/badge.svg)](https://github.com/haustex/pg-medusa-doit/actions/workflows/ci.yml)
 [![Medusa](https://img.shields.io/badge/Medusa-2.19%20%E2%80%93%202.22-7c3aed)](https://medusajs.com)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 ```bash
-npm install medusa-payment-doit@beta
+npm install medusa-payment-doit
 ```
 
 > **Community plugin, not an official doit.id product.** Independent open source (MIT), not affiliated with or endorsed by doit.id.
@@ -57,7 +57,7 @@ More: [settings](https://raw.githubusercontent.com/haustex/pg-medusa-doit/main/d
 ### Installation
 
 ```bash
-npm install medusa-payment-doit@beta
+npm install medusa-payment-doit
 ```
 
 `medusa-config.ts`:
@@ -134,6 +134,12 @@ payments with this store's marker. These are ignored: no ledger row, never liste
 
 Payments made by plugin 0.1.0/0.1.1 (no marker yet) are still reconciled while their Medusa session exists. Items that
 earlier versions raised for payments that are not this store's are dismissed automatically by the next job run.
+
+Ledger rows that earlier versions wrote for such payments are cleaned up once, by the first job run after upgrading to
+0.1.3. Rows of other apps or stores, of the other mode, or old rows whose Medusa session is gone are **marked excluded,
+never deleted**. Rows linked to an order are always kept. Excluded rows are left out of every dashboard figure; tick
+**"Show excluded"** in Transactions (or `?excluded=include|only` on the API and the CSV export) to see them with the
+reason.
 The optional reference prefix (same page) only makes your payments easy to recognise in the doit.id portal.
 
 ### Webhook setup
@@ -258,7 +264,7 @@ Report vulnerabilities privately: see [SECURITY.md](SECURITY.md).
 ### Instalasi
 
 ```bash
-npm install medusa-payment-doit@beta
+npm install medusa-payment-doit
 ```
 
 Tambahkan plugin dan provider di `medusa-config.ts` (contoh lengkap di bagian English di atas): `plugins` berisi
@@ -310,7 +316,13 @@ pernah masuk "Perlu tindakan":
   saat API key pertama kali disimpan di Admin.
 
 Pembayaran dari plugin 0.1.0/0.1.1 (belum ada penanda) tetap direkonsiliasi selama session Medusa-nya masih ada. Item
-yang dulu dibuat versi lama untuk pembayaran yang bukan milik toko ini ditutup otomatis pada job berikutnya. Prefix
+yang dulu dibuat versi lama untuk pembayaran yang bukan milik toko ini ditutup otomatis pada job berikutnya.
+
+Baris ledger yang dulu ditulis versi lama untuk pembayaran seperti itu dibersihkan sekali, oleh job pertama setelah
+upgrade ke 0.1.3. Baris aplikasi/toko lain, mode lain, atau baris lama yang session Medusa-nya sudah tidak ada **ditandai
+dikecualikan, tidak dihapus**. Baris yang terhubung ke order selalu dipertahankan. Baris yang dikecualikan tidak dihitung
+di angka dashboard mana pun; centang **"Tampilkan yang dikecualikan"** di Transaksi (atau `?excluded=include|only` di
+API dan export CSV) untuk melihatnya beserta alasannya. Prefix
 referensi (opsional, halaman yang sama) hanya supaya pembayaranmu mudah dikenali di portal doit.id.
 
 ### Setup webhook

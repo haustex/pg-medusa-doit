@@ -17,6 +17,8 @@ export const EXPORT_COLUMNS = [
   ["doit_created_at", "dibuat"],
   ["paid_at", "dibayar"],
   ["expires_at", "kedaluwarsa"],
+  // filled only when the export includes excluded rows
+  ["excluded_reason", "dikecualikan"],
 ] as const
 
 /** Local "YYYY-MM-DD HH:mm:ss" in the merchant's zone, so spreadsheets show what the Admin shows. */

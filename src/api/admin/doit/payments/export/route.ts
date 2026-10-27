@@ -23,6 +23,7 @@ export async function GET(req: AuthenticatedMedusaRequest, res: MedusaResponse) 
     status: query.status,
     rail: query.rail,
     q: query.q,
+    excluded: query.excluded,
   }
 
   const rows: Record<string, unknown>[] = []

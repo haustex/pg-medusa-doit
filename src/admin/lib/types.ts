@@ -65,6 +65,9 @@ export type LedgerPayment = {
   paid_at: string | null
   expires_at: string | null
   doit_created_at: string | null
+  /** set when the row is not this store's payment (other app/store on the key, other mode) */
+  excluded_at: string | null
+  excluded_reason: string | null
 }
 
 export type Withdrawal = {

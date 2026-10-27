@@ -96,7 +96,7 @@ await runSuite(async () => {
   const rowF = (await waitFor(async () => { const r = await paymentRow(payF); return r?.order_id ? r : null }, 30_000)) ?? (await paymentRow(payF))
   check("F ledger row paid + reconciled + order linked", rowF?.status === "paid" && !!rowF.reconciled_at && /^order_/.test(rowF.order_id ?? ""), JSON.stringify({ s: rowF?.status, o: rowF?.order_id }))
   check("F payment made outside Medusa (portal link, no store marker) stays out of the ledger", !(await one("select 1 from doit_payment where reference = 'INV/PORTAL'")))
-  const state = await one("select key, cursor, last_success_at, last_error, stats from doit_sync_state")
+  const state = await one("select key, cursor, last_success_at, last_error, stats from doit_sync_state where key = 'payments:doit'")
   check("F sync state saved (cursor, success, no error)", !!state?.cursor && !!state.last_success_at && !state.last_error, JSON.stringify(state))
   check("F sync log line", worker.log().includes("[doit] Sync doit:"))
   const rowE = await paymentRow(e.session.data.id)

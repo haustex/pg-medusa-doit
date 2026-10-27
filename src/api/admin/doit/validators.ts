@@ -24,6 +24,8 @@ export const PaymentsQuery = RangeQuery.extend({
   status: list.pipe(z.array(z.enum(["paid", "pending", "failed", "expired", "refunded"]))).optional(),
   rail: list.pipe(z.array(z.enum(["qris", "va", "transfer", "any"]))).optional(),
   q: z.string().trim().max(128).optional(),
+  // rows marked excluded (another app/store on the key, other mode): hidden by default
+  excluded: z.enum(["hide", "include", "only"]).default("hide"),
   ...page,
 })
 

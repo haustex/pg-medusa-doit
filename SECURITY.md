@@ -17,7 +17,7 @@ If the problem is in doit.id itself (their API, portal or hosted page), report i
 
 | Version | Supported |
 | --- | --- |
-| 0.1.x (beta) | Yes |
+| 0.1.x | Yes |
 
 ## Scope notes
 
