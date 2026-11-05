@@ -64,11 +64,27 @@ async function main() {
   const { Client } = createRequire(path.join(APP_DIR, "package.json"))("pg")
   const adminUrl = new URL(db)
   adminUrl.pathname = "/postgres"
+  // A freshly started postgres container first runs a socket-only init server and restarts: TCP connections are
+  // refused until the final server is up. Wait for it (60 s) instead of failing on the first connect.
+  const connect = async () => {
+    const started = Date.now()
+    for (;;) {
+      const client = new Client({ connectionString: adminUrl.toString() })
+      try {
+        await client.connect()
+        await client.query("select 1")
+        return client
+      } catch (e) {
+        await client.end().catch(() => {})
+        if (Date.now() - started > 60_000) throw new Error(`Postgres not ready after 60 s at ${adminUrl.host}: ${e.message}`)
+        await new Promise((r) => setTimeout(r, 1000))
+      }
+    }
+  }
   const results = []
   for (const suite of suites) {
     step(`${suite}: reset ${dbName}, migrate`)
-    const client = new Client({ connectionString: adminUrl.toString() })
-    await client.connect()
+    const client = await connect()
     await client.query(`drop database if exists "${dbName}" with (force)`)
     await client.query(`create database "${dbName}"`)
     await client.end()
