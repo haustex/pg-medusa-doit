@@ -1,7 +1,7 @@
 {
   "name": "medusa-payment-doit",
-  "version": "0.1.3",
-  "description": "doit.id payment gateway (QRIS, Virtual Account, bank transfer) for Medusa v2 — by Haus Kayu",
+  "version": "0.1.4",
+  "description": "doit.id payment provider for Medusa v2: QRIS, Virtual Account and bank transfer (IDR), credentials managed in the Admin, verified webhooks and reconciliation — by Haus Kayu",
   "author": "Haus Kayu <dev@hauskayu.com> (https://hauskayu.com)",
   "license": "MIT",
   "homepage": "https://github.com/haustex/pg-medusa-doit#readme",
@@ -38,15 +38,18 @@
   },
   "keywords": [
     "medusa",
-    "medusa-plugin",
     "medusa-v2",
+    "medusa-plugin",
+    "medusa-plugin-integration",
+    "medusa-plugin-payment",
     "payment",
+    "payment-gateway",
     "doit",
     "qris",
     "virtual-account",
+    "bank-transfer",
     "indonesia",
-    "medusa-plugin-integration",
-    "medusa-plugin-payment"
+    "idr"
   ],
   "scripts": {
     "build": "medusa plugin:build",

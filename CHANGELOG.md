@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-11-10
+
+### Changed
+
+- npm metadata and README only, no code changes: refined `description` and `keywords` for the Medusa Integrations
+  listing (`medusa-v2`, `medusa-plugin-integration`, `medusa-plugin-payment`), Haus Kayu logo, compatibility
+  table and quick start at the top of the README.
+
 ## [0.1.3] - 2026-10-27
 
 ### Added

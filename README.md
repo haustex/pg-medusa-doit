@@ -1,16 +1,53 @@
-# PG Medusa Doit.id
+<p align="center">
+  <a href="https://hauskayu.com">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="docs/logo-dark.svg">
+      <img src="docs/logo.svg" alt="Haus Kayu" width="260">
+    </picture>
+  </a>
+</p>
 
-**Terima QRIS, VA, dan transfer di Medusa lewat doit.id. Dibuat dan dipakai sendiri oleh Haus Kayu.**
-<br>Accept QRIS, Virtual Account and bank transfer in Medusa v2 through doit.id. Built and used in production by Haus Kayu.
+# medusa-payment-doit
+
+**doit.id payment provider for Medusa v2: QRIS, Virtual Account and bank transfer, credentials managed in the Admin,
+webhooks verified and reconciled.** Built and used in production by Haus Kayu.
+<br>Terima QRIS, VA, dan transfer di Medusa lewat doit.id. Dibuat dan dipakai sendiri oleh Haus Kayu.
 
 [![npm](https://img.shields.io/npm/v/medusa-payment-doit)](https://www.npmjs.com/package/medusa-payment-doit)
 [![CI](https://github.com/haustex/pg-medusa-doit/actions/workflows/ci.yml/badge.svg)](https://github.com/haustex/pg-medusa-doit/actions/workflows/ci.yml)
 [![Medusa](https://img.shields.io/badge/Medusa-2.19%20%E2%80%93%202.22-7c3aed)](https://medusajs.com)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
+### Compatibility
+
+| Plugin | Medusa | Node | Tested in CI on |
+| --- | --- | --- | --- |
+| 0.1.x | 2.19.0 or newer 2.x (`^2.19.0`) | 20.19+ or 22.12+ | Medusa 2.19.0 and 2.22.0 |
+
+### Quick start
+
 ```bash
 npm install medusa-payment-doit
+npx medusa db:migrate
+echo "DOIT_ENCRYPTION_KEY=$(openssl rand -hex 32)" >> .env   # same value on server and worker
 ```
+
+```ts
+// medusa-config.ts
+plugins: [{ resolve: "medusa-payment-doit", options: {} }],
+modules: [
+  {
+    resolve: "@medusajs/medusa/payment",
+    options: {
+      providers: [{ resolve: "medusa-payment-doit/providers/doit", id: "doit", options: {} }],
+    },
+  },
+],
+```
+
+Enable **doit.id** (`pp_doit_doit`) in your IDR region, paste the API key and webhook secret in **Settings → doit.id**,
+and set the doit.id webhook URL to `https://<your-medusa-backend>/hooks/payment/doit_doit`.
+Full steps: [Installation](#installation) · [Configuration](#configuration) · [Webhook setup](#webhook-setup).
 
 > **Community plugin, not an official doit.id product.** Independent open source (MIT), not affiliated with or endorsed by doit.id.
 > **Plugin komunitas, bukan produk resmi doit.id.** Open source independen (MIT), tidak berafiliasi dengan doit.id.
