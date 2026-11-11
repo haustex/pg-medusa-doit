@@ -132,6 +132,12 @@ echo "DOIT_ENCRYPTION_KEY=$(openssl rand -hex 32)" >> .env   # same value on ser
 
 Finally enable **doit.id** (`pp_doit_doit`) as a payment provider in your **IDR** region.
 
+> **Note for pnpm without hoisting or a locally linked copy:** the Admin build picks up this plugin's Tailwind classes
+> through `require.resolve("medusa-payment-doit/admin")` from `@medusajs/admin-bundler`; if the bundler cannot resolve the package
+> (pnpm with `hoist=false`, or a plugin symlinked from outside the project), the plugin's Admin pages lose their layout.
+> npm, Yarn and pnpm's defaults are fine; otherwise install from npm (or `npm pack`) next to the bundler, or add
+> `hoist-pattern[]=medusa-payment-doit` to `.npmrc`.
+
 ### Configuration
 
 Open **Settings → doit.id** in the Admin:
@@ -313,6 +319,12 @@ echo "DOIT_ENCRYPTION_KEY=$(openssl rand -hex 32)" >> .env   # nilai sama di ser
 ```
 
 Lalu aktifkan **doit.id** (`pp_doit_doit`) sebagai payment provider di region **IDR**.
+
+> **Catatan untuk pnpm tanpa hoisting atau plugin yang di-symlink lokal:** build Admin mengambil class Tailwind plugin
+> ini lewat `require.resolve("medusa-payment-doit/admin")` dari `@medusajs/admin-bundler`; kalau bundler tidak bisa me-resolve paketnya
+> (pnpm dengan `hoist=false`, atau plugin di-symlink dari luar proyek), halaman Admin plugin kehilangan layout-nya. npm,
+> Yarn, dan pnpm bawaan aman; selain itu pasang dari npm (atau `npm pack`) di sebelah bundler, atau tambahkan
+> `hoist-pattern[]=medusa-payment-doit` di `.npmrc`.
 
 ### Konfigurasi
 
