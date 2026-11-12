@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-11-12
+
+### Fixed
+
+- `@medusajs/test-utils` is no longer listed as a peer dependency: it is only used by the plugin's own tests
+  (it stays a devDependency), so installing the plugin no longer asks for it or warns about it.
+
 ## [0.1.4] - 2026-11-10
 
 ### Changed

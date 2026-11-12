@@ -1,6 +1,6 @@
 {
   "name": "medusa-payment-doit",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "doit.id payment provider for Medusa v2: QRIS, Virtual Account and bank transfer (IDR), credentials managed in the Admin, verified webhooks and reconciliation — by Haus Kayu",
   "author": "Haus Kayu <dev@hauskayu.com> (https://hauskayu.com)",
   "license": "MIT",
@@ -97,7 +97,6 @@
     "@medusajs/icons": "^2.19.0",
     "@medusajs/js-sdk": "^2.19.0",
     "@medusajs/medusa": "^2.19.0",
-    "@medusajs/test-utils": "^2.19.0",
     "@medusajs/ui": "^4.2.1"
   },
   "engines": {
